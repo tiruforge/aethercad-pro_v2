@@ -4097,7 +4097,37 @@ ${g.related.join(', ')}
             throw new Error(errData.error || errData.details || `Server error: ${response.status}`);
           }
 
-          const result = await response.json();
+          let result = await response.json();
+          // Scale AI units to canvas units so it looks correct on screen
+const unitScale = result?.meta?.units === 'ft' ? 20 : 1; // 1 ft = 20 canvas units
+
+if (Array.isArray(result.walls)) {
+  result.walls = result.walls.map(w => ({
+    ...w,
+    x1: Number(w.x1 || 0) * unitScale,
+    y1: Number(w.y1 || 0) * unitScale,
+    x2: Number(w.x2 || 0) * unitScale,
+    y2: Number(w.y2 || 0) * unitScale,
+    // Use a fixed wall thickness in canvas units (pixels)
+    thickness: 16
+  }));
+}
+
+if (Array.isArray(result.doors)) {
+  result.doors = result.doors.map(d => ({
+    ...d,
+    position: Number(d.position || 0) * unitScale,
+    width: Number(d.width || 0) * unitScale
+  }));
+}
+
+if (Array.isArray(result.windows)) {
+  result.windows = result.windows.map(win => ({
+    ...win,
+    position: Number(win.position || 0) * unitScale,
+    width: Number(win.width || 0) * unitScale
+  }));
+}
 
           if (aiStatusText) aiStatusText.innerText = 'Sinking structural joints...';
 
