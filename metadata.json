@@ -1,0 +1,6 @@
+{
+  "name": "CAD Drawing App",
+  "description": "A high-fidelity full CAD web application with infinite grids, dynamic coordinate snap engines, multi-unit conversion systems, premium layer managers, live visual dimension markers, precise numeric shape drafting tools, and an advanced Civil Engineering drafting toolkit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

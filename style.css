@@ -1,0 +1,228 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cad-bg: #0B0D0F;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", sans-serif;
+}
+
+/* CAD Work Bench Styling overrides */
+
+/* Show high-precision crosshair cursor over active drawing canvas */
+.cad-canvas-cursor {
+  cursor: crosshair;
+}
+
+/* Custom Scrollbars for dense CAD entity panels */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 17, 21, 0.4);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(42, 45, 53, 0.7);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+/* Custom transitions and states for tool active styling */
+.tool-btn {
+  @apply relative overflow-hidden transition-all duration-150 ease-out;
+}
+
+/* Color swatch scaling feed */
+.color-swatch {
+  @apply transform transition-all duration-150 hover:scale-110 active:scale-95;
+}
+
+/* Entity list hover states */
+.entity-list-item {
+  @apply relative overflow-hidden transition-all duration-200 ease-in-out hover:bg-[#1E2127]/60 pl-3 pr-2 py-2 border-l-2 border-transparent;
+}
+
+.entity-list-item:hover {
+  @apply border-[#3B82F6]/85 bg-[#1E2127]/90;
+}
+
+.entity-list-item.selected-item {
+  @apply border-[#22d3ee] bg-[#1E2127]/95 shadow-md shadow-[#22d3ee]/5;
+}
+
+/* Slider custom styling */
+input[type="range"]::-webkit-slider-thumb {
+  @apply h-4 w-4 rounded-full border border-[#3B82F6] bg-[#181A1F] shadow-md ring-offset-[#0F1115] transition-all duration-100 hover:scale-110 active:scale-95;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply h-4 w-4 rounded-full border border-[#3B82F6] bg-[#181A1F] shadow-md ring-offset-[#0F1115] transition-all duration-100 hover:scale-110 active:scale-95;
+}
+
+/* Grid animation toggles */
+#toggle-snap-btn, #toggle-grid-btn {
+  @apply shadow-inner;
+}
+
+/* Animation triggers */
+@keyframes pulse-blue {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+
+.pulsing-state {
+  animation: pulse-blue 3s infinite ease-in-out;
+}
+
+/* ==========================================================================
+   PREMIUM CAD STYLING & LIGHT/DARK VARIABLES
+   ========================================================================== */
+
+:root {
+  --bg-primary: #131519;
+  --bg-secondary: #181A1F;
+  --bg-tertiary: #0F1115;
+  --bg-header: #1E2127;
+  --border-main: #2A2D35;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --canvas-bg: #0B0D0F;
+  --grid-major: rgba(148, 163, 184, 0.28);
+  --grid-minor: rgba(148, 163, 184, 0.12);
+}
+
+body.light-theme {
+  --bg-primary: #F3F4F6 !important;
+  --bg-secondary: #FFFFFF !important;
+  --bg-tertiary: #E5E7EB !important;
+  --bg-header: #F9FAFB !important;
+  --border-main: #D1D5DB !important;
+  --text-primary: #1F2937 !important;
+  --text-secondary: #4B5563 !important;
+  --canvas-bg: #F9FAFB !important;
+  --grid-major: rgba(75, 85, 99, 0.25) !important;
+  --grid-minor: rgba(75, 85, 99, 0.08) !important;
+}
+
+/* Apply light theme overrides programmatically for background utilities */
+body.light-theme .bg-\[\#131519\] { background-color: var(--bg-primary) !important; }
+body.light-theme .bg-\[\#181A1F\] { background-color: var(--bg-secondary) !important; }
+body.light-theme .bg-\[\#0F1115\] { background-color: var(--bg-tertiary) !important; }
+body.light-theme .bg-\[\#1E2127\] { background-color: var(--bg-header) !important; }
+body.light-theme .bg-\[\#0B0D0F\] { background-color: var(--canvas-bg) !important; }
+
+/* Apply border color overrides */
+body.light-theme .border-\[\#2A2D35\] { border-color: var(--border-main) !important; }
+body.light-theme .border-\[\#2A2D35\]\/50 { border-color: rgba(209, 213, 219, 0.5) !important; }
+body.light-theme .border-\[\#2A2D35\]\/60 { border-color: rgba(209, 213, 219, 0.6) !important; }
+body.light-theme .border-\[\#2A2D35\]\/80 { border-color: rgba(209, 213, 219, 0.8) !important; }
+body.light-theme div, 
+body.light-theme aside,
+body.light-theme header,
+body.light-theme footer,
+body.light-theme section {
+  border-color: var(--border-main);
+}
+
+/* Apply text color overrides */
+body.light-theme {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+body.light-theme .text-gray-100,
+body.light-theme .text-gray-200,
+body.light-theme .text-gray-250,
+body.light-theme .text-gray-300,
+body.light-theme .text-slate-250,
+body.light-theme .text-slate-300,
+body.light-theme .text-\[\#E0E0E0\] { color: var(--text-primary) !important; }
+
+body.light-theme .text-gray-400,
+body.light-theme .text-gray-500,
+body.light-theme .text-slate-400,
+body.light-theme .text-slate-500 { color: var(--text-secondary) !important; }
+
+/* Select boxes, Inputs, Swatches ring-offset correction in light mode */
+body.light-theme select,
+body.light-theme input[type="text"],
+body.light-theme input[type="number"] {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-main) !important;
+}
+
+body.light-theme .ring-offset-\[\#0F1115\] {
+  --tw-ring-offset-color: var(--bg-tertiary) !important;
+}
+
+/* Premium micro-interactions & Glows */
+.action-btn:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
+  transform: translateY(-0.5px);
+}
+
+.action-btn:active {
+  transform: translateY(0.5px);
+}
+
+/* Draggable & Floating Glassmorphic Panels */
+#property-inspector, #shortcuts-panel {
+  background: rgba(24, 26, 31, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.light-theme #property-inspector, 
+body.light-theme #shortcuts-panel {
+  background: rgba(255, 255, 255, 0.88) !important;
+  color: #1F2937 !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Context menu style */
+#custom-context-menu {
+  background: rgba(30, 33, 39, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+body.light-theme #custom-context-menu {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(0,0,0,0.12) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* Context menu options hover styling */
+.context-menu-item {
+  @apply py-1.5 px-3 flex items-center gap-2 cursor-pointer transition-colors duration-100 ease-out;
+}
+.context-menu-item:hover {
+  background-color: #2563eb;
+  color: #ffffff !important;
+}
+
+body.light-theme .context-menu-item {
+  color: #1f2937 !important;
+}
+
+body.light-theme .context-menu-item:hover {
+  background-color: #3b82f6;
+  color: #ffffff !important;
+}
