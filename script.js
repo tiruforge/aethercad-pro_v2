@@ -4100,6 +4100,8 @@ ${g.related.join(', ')}
           let result = await response.json();
           // Scale AI units to canvas units so it looks correct on screen
 const unitScale = result?.meta?.units === 'ft' ? 20 : 1; // 1 ft = 20 canvas units
+window.AI_UNIT_SCALE = unitScale;
+window.AI_UNITS = result?.meta?.units || 'ft';
 
 if (Array.isArray(result.walls)) {
   result.walls = result.walls.map(w => ({
@@ -4910,15 +4912,24 @@ if (Array.isArray(result.windows)) {
     
     // Pixel helper converts pixel to active unit value number only
     const pxToUnitNum = (pixels) => {
-      switch (this.activeUnit) {
-        case 'mm': return pixels * 0.264583;
-        case 'cm': return pixels * 0.0264583;
-        case 'm': return pixels * 0.000264583;
-        case 'in': return pixels * 0.0104167;
-        case 'px':
-        default: return pixels;
-      }
-    };
+  const aiScale = window.AI_UNIT_SCALE;  // like 20 (px per ft)
+  const aiUnits = window.AI_UNITS;       // 'ft'
+
+  // If AI plan is active, use AI scale for correct CAD units
+  if (aiScale && aiUnits === 'ft') {
+    return pixels / aiScale; // pixels -> feet
+  }
+
+  // Fallback (old screen-based conversions)
+  switch (this.activeUnit) {
+    case 'mm': return pixels * 0.264583;
+    case 'cm': return pixels * 0.0264583;
+    case 'm':  return pixels * 0.000264583;
+    case 'in': return pixels * 0.0104167;
+    case 'px': return pixels;
+    default: return pixels;
+  }
+};
     
     if (['line', 'wall', 'beam', 'door', 'window', 'dimension'].includes(shape.type)) {
       if (shapeType) shapeType.innerText = shape.type.toUpperCase();
