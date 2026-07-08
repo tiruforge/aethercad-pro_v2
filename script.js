@@ -4102,6 +4102,8 @@ ${g.related.join(', ')}
 const unitScale = result?.meta?.units === 'ft' ? 20 : 1; // 1 ft = 20 canvas units
 window.AI_UNIT_SCALE = unitScale;
 window.AI_UNITS = result?.meta?.units || 'ft';
+this.aiUnitScale = unitScale;
+this.aiUnits = result?.meta?.units || 'ft';
 
 if (Array.isArray(result.walls)) {
   result.walls = result.walls.map(w => ({
@@ -6145,7 +6147,7 @@ if (Array.isArray(result.windows)) {
         unit = 'in';
         break;
       case 'ft':
-        val = pixels * (0.0104167 / 12.0);
+        val = this.aiUnitScale ? (pixels / this.aiUnitScale) : (pixels * (0.0104167 / 12.0));
         unit = 'ft';
         break;
       case 'px':
