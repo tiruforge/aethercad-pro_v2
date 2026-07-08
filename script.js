@@ -6247,7 +6247,7 @@ mappedShapes.push({
         unit = 'in²';
         break;
       case 'ft':
-        val = pixelsArea * ((0.0104167 / 12.0) ** 2);
+       val = this.aiUnitScale ? (pixelsArea / (this.aiUnitScale ** 2)) : (pixelsArea * ((0.0104167 / 12.0) ** 2));
         unit = 'ft²';
         break;
       case 'px':
