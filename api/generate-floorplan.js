@@ -55,6 +55,9 @@ JSON Schema:
   "windows": [
     { "wallIndex": number, "position": number, "width": number }
   ]
+    "rooms": [
+  { "name": "Master Bedroom", "x": number, "y": number, "width": number, "height": number }
+]
 }
 
 Rules:

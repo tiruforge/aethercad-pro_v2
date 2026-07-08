@@ -4131,6 +4131,16 @@ if (Array.isArray(result.windows)) {
     position: Number(win.position || 0) * unitScale,
     width: Number(win.width || 0) * unitScale
   }));
+  // Scale rooms (for room labels)
+if (Array.isArray(result.rooms)) {
+  result.rooms = result.rooms.map(r => ({
+    ...r,
+    x: Number(r.x || 0) * unitScale,
+    y: Number(r.y || 0) * unitScale,
+    width: Number(r.width || 0) * unitScale,
+    height: Number(r.height || 0) * unitScale,
+  }));
+}
 }
 
           if (aiStatusText) aiStatusText.innerText = 'Sinking structural joints...';
@@ -4182,6 +4192,23 @@ if (Array.isArray(result.windows)) {
                 wallThickness: Number(w.thickness || 16),
                 layerId: 'walls'
               };
+              // Add room labels (template-style)
+if (Array.isArray(result.rooms)) {
+  result.rooms.forEach((r, idx) => {
+    mappedShapes.push({
+      type: 'roomlabel',
+      id: 'ai_room_' + idx + '_' + Math.random().toString(36).slice(2, 7),
+      x: Number(r.x || 0),
+      y: Number(r.y || 0),
+      width: Number(r.width || 0),
+      height: Number(r.height || 0),
+      labelText: String(r.name || `Room ${idx + 1}`),
+      color: 'rgba(168, 85, 247, 0.7)',
+      lineWidth: 1.5,
+      layerId: 'rooms'
+    });
+  });
+}
               wallsList.push(wallObj);
               mappedShapes.push(wallObj);
               // Add a dimension for this wall (shows individual wall length)
