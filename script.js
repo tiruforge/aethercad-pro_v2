@@ -6122,150 +6122,75 @@ if (Array.isArray(result.windows)) {
   }
 
   /**
- * Format any world metric pixels to chosen drawing unit display notation
- */
-formatValue(pixels) {
-  // If AI scale is set, convert using AI world units (not screen DPI)
-  const aiScale = window.AI_UNIT_SCALE;
-  const aiUnits = window.AI_UNITS;
-
-  if (aiScale && aiUnits === 'ft') {
-    const feet = pixels / aiScale;
-
-    let val = feet;
-    let unit = 'ft';
-
+   * Format any world metric pixels to chosen drawing unit display notation
+   */
+  formatValue(pixels) {
+    let val = pixels;
+    let unit = 'px';
     switch (this.activeUnit) {
       case 'mm':
-        val = feet * 304.8;
+        val = pixels * 0.264583;
         unit = 'mm';
         break;
       case 'cm':
-        val = feet * 30.48;
+        val = pixels * 0.0264583;
         unit = 'cm';
         break;
       case 'm':
-        val = feet * 0.3048;
+        val = pixels * 0.000264583;
         unit = 'm';
         break;
       case 'in':
-        val = feet * 12.0;
+        val = pixels * 0.0104167;
         unit = 'in';
         break;
       case 'ft':
-      default:
-        val = feet;
+        val = pixels * (0.0104167 / 12.0);
         unit = 'ft';
         break;
+      case 'px':
+      default:
+        val = pixels;
+        unit = 'px';
+        break;
     }
-
+    val = val * (this.scaleRatio || 1.0);
     return `${val.toFixed(2)} ${unit}`;
   }
 
-  // Fallback (old behavior)
-  let val = pixels;
-  let unit = 'px';
-  switch (this.activeUnit) {
-    case 'mm':
-      val = pixels * 0.264583;
-      unit = 'mm';
-      break;
-    case 'cm':
-      val = pixels * 0.0264583;
-      unit = 'cm';
-      break;
-    case 'm':
-      val = pixels * 0.000264583;
-      unit = 'm';
-      break;
-    case 'in':
-      val = pixels * 0.0104167;
-      unit = 'in';
-      break;
-    case 'ft':
-      val = pixels * (0.0104167 / 12.0);
-      unit = 'ft';
-      break;
-    case 'px':
-    default:
-      val = pixels;
-      unit = 'px';
-      break;
-  }
-  val = val * (this.scaleRatio || 1.0);
-  return `${val.toFixed(2)} ${unit}`;
-}
-
   formatArea(pixelsArea) {
-  const aiScale = window.AI_UNIT_SCALE;
-  const aiUnits = window.AI_UNITS;
-
-  if (aiScale && aiUnits === 'ft') {
-    const ft2 = pixelsArea / (aiScale * aiScale);
-
-    let val = ft2;
-    let unit = 'ft²';
-
+    let val = pixelsArea;
+    let unit = 'px²';
     switch (this.activeUnit) {
       case 'mm':
-        val = ft2 * (304.8 ** 2);
+        val = pixelsArea * (0.264583 ** 2);
         unit = 'mm²';
         break;
       case 'cm':
-        val = ft2 * (30.48 ** 2);
+        val = pixelsArea * (0.0264583 ** 2);
         unit = 'cm²';
         break;
       case 'm':
-        val = ft2 * (0.3048 ** 2);
+        val = pixelsArea * (0.000264583 ** 2);
         unit = 'm²';
         break;
       case 'in':
-        val = ft2 * (12.0 ** 2);
+        val = pixelsArea * (0.0104167 ** 2);
         unit = 'in²';
         break;
       case 'ft':
-      default:
-        val = ft2;
+        val = pixelsArea * ((0.0104167 / 12.0) ** 2);
         unit = 'ft²';
         break;
+      case 'px':
+      default:
+        val = pixelsArea;
+        unit = 'px²';
+        break;
     }
-
+    val = val * ((this.scaleRatio || 1.0) ** 2);
     return `${val.toFixed(2)} ${unit}`;
   }
-
-  // Fallback (old behavior)
-  let val = pixelsArea;
-  let unit = 'px²';
-  switch (this.activeUnit) {
-    case 'mm':
-      val = pixelsArea * (0.264583 ** 2);
-      unit = 'mm²';
-      break;
-    case 'cm':
-      val = pixelsArea * (0.0264583 ** 2);
-      unit = 'cm²';
-      break;
-    case 'm':
-      val = pixelsArea * (0.000264583 ** 2);
-      unit = 'm²';
-      break;
-    case 'in':
-      val = pixelsArea * (0.0104167 ** 2);
-      unit = 'in²';
-      break;
-    case 'ft':
-      val = pixelsArea * ((0.0104167 / 12.0) ** 2);
-      unit = 'ft²';
-      break;
-    case 'px':
-    default:
-      val = pixelsArea;
-      unit = 'px²';
-      break;
-  }
-  val = val * ((this.scaleRatio || 1.0) ** 2);
-  return `${val.toFixed(2)} ${unit}`;
-}
 
   /**
    * Convert entered metric values back into standard world pixels
