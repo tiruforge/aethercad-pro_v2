@@ -4184,6 +4184,21 @@ if (Array.isArray(result.windows)) {
               };
               wallsList.push(wallObj);
               mappedShapes.push(wallObj);
+              // Add a dimension for this wall (shows individual wall length)
+mappedShapes.push({
+  type: 'dimension',
+  id: 'ai_dim_' + idx + '_' + Math.random().toString(36).slice(2, 7),
+  x1: wallObj.x1,
+  y1: wallObj.y1,
+  x2: wallObj.x2,
+  y2: wallObj.y2,
+  color: '#E5E7EB',
+  lineWidth: 1,
+  dimType: 'aligned',
+  arrowSize: 8,
+  offset: 25,
+  layerId: 'dimensions'
+});
             });
           }
 
