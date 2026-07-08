@@ -4193,8 +4193,32 @@ if (Array.isArray(result.rooms)) {
                 layerId: 'walls'
               };
               // Add room labels (template-style)
+// Add room labels (template-style) + show parking as GAP (outline only)
 if (Array.isArray(result.rooms)) {
   result.rooms.forEach((r, idx) => {
+    const roomType = String(r.type || '').toLowerCase();
+    const roomName = String(r.name || '').toLowerCase();
+    const isParking = roomType === 'parking' || roomName.includes('parking');
+
+    if (isParking) {
+      // 5.5: draw only an outline rectangle (gap)
+      mappedShapes.push({
+        type: 'rectangle',
+        id: 'ai_parking_' + idx + '_' + Math.random().toString(36).slice(2, 7),
+        x: Number(r.x || 0),
+        y: Number(r.y || 0),
+        width: Number(r.width || 0),
+        height: Number(r.height || 0),
+        color: 'rgba(148, 163, 184, 0.95)', // grey outline
+        lineWidth: 2,
+        layerId: 'rooms'
+      });
+
+      // do NOT add roomlabel (keeps it empty)
+      return;
+    }
+
+    // Normal rooms: show purple template label
     mappedShapes.push({
       type: 'roomlabel',
       id: 'ai_room_' + idx + '_' + Math.random().toString(36).slice(2, 7),
