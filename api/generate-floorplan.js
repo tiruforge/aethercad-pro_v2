@@ -1,6 +1,5 @@
 // api/generate-floorplan.js
 
-// 1. Helper function: Extract plot size using your proven regex
 function extractPlotSize(prompt) {
   const m = prompt.match(/(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?/i);
   if (!m) return null;
@@ -12,13 +11,12 @@ function extractPlotSize(prompt) {
   if (unit === "'" || unit === "ft" || unit === "feet") unit = "ft";
   else if (unit === "m" || unit === "meter" || unit === "meters") unit = "m";
   else if (unit === "cm") unit = "cm";
-  else unit = "ft"; // default
+  else unit = "ft";
 
   if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
   return { units: unit, outerWidth: w, outerHeight: h };
 }
 
-// 2. Helper function: Extract requirements
 function extractRequirements(prompt) {
   const p = String(prompt || "").toLowerCase();
 
@@ -34,7 +32,6 @@ function extractRequirements(prompt) {
   return { bhk, bathrooms, wantsParking, wantsBalcony };
 }
 
-// 3. Helper function: Default plot configurations
 function defaultPlotForBHK(bhk) {
   if (bhk === 1) return { units: "ft", outerWidth: 20, outerHeight: 30 };
   if (bhk === 2) return { units: "ft", outerWidth: 30, outerHeight: 40 };
@@ -43,73 +40,10 @@ function defaultPlotForBHK(bhk) {
   return { units: "ft", outerWidth: 30, outerHeight: 40 };
 }
 
-// 4. Non-Destructive Geometry Snapper to align rooms & walls perfectly on integer bounds
-function alignAndSnapGeometry(plan, finalDims) {
-  if (!plan) return plan;
-
-  // Enforce outer plot constraints to prevent math drifting
-  plan.meta = plan.meta || {};
-  plan.meta.units = finalDims.units;
-  plan.meta.outerWidth = finalDims.outerWidth;
-  plan.meta.outerHeight = finalDims.outerHeight;
-
-  const ow = finalDims.outerWidth;
-  const oh = finalDims.outerHeight;
-
-  // Snaps coordinate to nearest whole integer
-  const snap = (v) => (v !== undefined ? Math.round(Number(v)) : 0);
-
-  // A. Snap wall segments perfectly to the grid bounds
-  if (Array.isArray(plan.walls)) {
-    plan.walls.forEach(wall => {
-      wall.x1 = Math.min(ow, Math.max(0, snap(wall.x1)));
-      wall.y1 = Math.min(oh, Math.max(0, snap(wall.y1)));
-      wall.x2 = Math.min(ow, Math.max(0, snap(wall.x2)));
-      wall.y2 = Math.min(oh, Math.max(0, snap(wall.y2)));
-      if (wall.thickness !== undefined) {
-        wall.thickness = Math.max(1, snap(wall.thickness));
-      }
-    });
-  }
-
-  // B. Snap rooms coordinates to align with wall edges
-  if (Array.isArray(plan.rooms)) {
-    plan.rooms.forEach(room => {
-      room.x = Math.min(ow, Math.max(0, snap(room.x)));
-      room.y = Math.min(oh, Math.max(0, snap(room.y)));
-      room.width = Math.min(ow - room.x, Math.max(2, snap(room.width)));
-      room.height = Math.min(oh - room.y, Math.max(2, snap(room.height)));
-    });
-  }
-
-  // C. Round doors/windows along their mapped wallIndex
-  if (Array.isArray(plan.doors)) {
-    plan.doors.forEach(door => {
-      door.position = snap(door.position);
-      if (door.width !== undefined) door.width = snap(door.width);
-    });
-  }
-
-  if (Array.isArray(plan.windows)) {
-    plan.windows.forEach(win => {
-      win.position = snap(win.position);
-      if (win.width !== undefined) win.width = snap(win.width);
-    });
-  }
-
-  return plan;
-}
-
-// Free models across DIFFERENT providers (not all Venice) to avoid single-provider rate limits
-const FALLBACK_MODELS = [
-  { id: "mistralai/mistral-7b-instruct:free", timeout: 12000 },       // Provider: Mistral — fast, reliable
-  { id: "microsoft/phi-3-medium-128k-instruct:free", timeout: 12000 }, // Provider: Microsoft — good JSON
-  { id: "meta-llama/llama-3.1-8b-instruct:free", timeout: 10000 },    // Provider: multiple — small but fast
-  { id: "google/gemma-2-9b-it:free", timeout: 10000 }                 // Provider: Google — good instruction following
-];
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default async function handler(req, res) {
-  // Set CORS Headers
+  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -134,10 +68,13 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "API key missing in environment configurations" });
+      return res.status(500).json({ error: "API key missing" });
     }
 
-    const systemPrompt = `
+    const fallbackDims = defaultPlotForBHK(reqs.bhk);
+    const finalDims = dims || fallbackDims;
+
+    const system = `
 You are a CAD floorplan generator.
 
 Return ONLY valid JSON (no markdown, no explanation, no extra text).
@@ -179,13 +116,10 @@ Important geometry rules:
 - Coordinates are in meta.units.
 - First 4 walls MUST be the outer rectangle exactly:
   (0,0)->(outerWidth,0)->(outerWidth,outerHeight)->(0,outerHeight)->(0,0)
-- room rectangles must be inside the outer boundary and should not overlap.
+- Room rectangles must be inside the outer boundary and must not overlap.
 `.trim();
 
-    const fallbackDims = defaultPlotForBHK(reqs.bhk);
-    const finalDims = dims || fallbackDims;
-
-    const userMessage = `
+    const user = `
 User request: ${prompt}
 
 Detected requirements:
@@ -201,124 +135,107 @@ Plot size to use:
 Output ONLY the JSON in the schema.
 `.trim();
 
-   const diagnostics = [];
+    // Try up to 3 times (handles temporary 429 rate limits)
+    const MAX_TRIES = 3;
 
-// Helper: wait ms milliseconds
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      console.log(`Attempt ${attempt} of ${MAX_TRIES}...`);
 
-// Helper: attempt one model call, returns { plan } on success or { error, statusCode, details } on failure
-async function tryModel(modelId, timeoutMs) {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
-      "X-Title": "AetherCAD Pro v2"
-    },
-    body: JSON.stringify({
-      model: modelId,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
-      ],
-    }),
-    signal: AbortSignal.timeout(timeoutMs)
-  });
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
+          "X-Title": "AetherCAD Pro v2"
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-3.3-70b-instruct:free",
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user }
+          ],
+        }),
+      });
 
-  const rawText = await response.text();
+      // Read response as text first so we never crash on non-JSON
+      const rawText = await response.text();
 
-  if (!response.ok) {
-    // Try to extract retry_after_seconds from OpenRouter 429 response
-    let retryAfter = null;
-    try {
-      const errData = JSON.parse(rawText);
-      retryAfter = errData?.error?.metadata?.retry_after_seconds ?? null;
-    } catch (_) {}
-    return {
-      error: "non-ok",
-      statusCode: response.status,
-      details: rawText,
-      retryAfter
-    };
-  }
+      // If rate limited, wait and retry
+      if (response.status === 429) {
+        let waitSeconds = 8; // default wait
+        try {
+          const errData = JSON.parse(rawText);
+          const suggested = errData?.error?.metadata?.retry_after_seconds;
+          if (suggested && suggested <= 20) {
+            waitSeconds = Math.ceil(suggested) + 1; // add 1s buffer
+          }
+        } catch (_) {}
 
-  let parsedData;
-  try {
-    parsedData = JSON.parse(rawText);
-  } catch (_) {
-    return { error: "invalid-json", details: rawText };
-  }
+        console.log(`429 rate limit on attempt ${attempt}. Waiting ${waitSeconds}s...`);
 
-  const content = parsedData?.choices?.[0]?.message?.content;
-  if (!content) {
-    return { error: "no-content", details: rawText };
-  }
+        if (attempt < MAX_TRIES) {
+          await wait(waitSeconds * 1000);
+          continue; // retry
+        } else {
+          // All retries exhausted
+          return res.status(429).json({
+            error: "AI is temporarily rate limited. Please wait a few seconds and try again.",
+            details: rawText
+          });
+        }
+      }
 
-  // Clean markdown fences if present
-  const cleaned = content.replace(/```json|```/g, "").trim();
+      // Any other non-OK status (404, 500, etc.) — fail immediately, no retry
+      if (!response.ok) {
+        return res.status(502).json({
+          error: `OpenRouter returned status ${response.status}`,
+          details: rawText
+        });
+      }
 
-  let plan;
-  try {
-    plan = JSON.parse(cleaned);
-  } catch (_) {
-    return { error: "invalid-plan-json", details: cleaned };
-  }
+      // Parse the successful response
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (_) {
+        return res.status(502).json({
+          error: "OpenRouter returned non-JSON response",
+          rawText: rawText
+        });
+      }
 
-  return { plan };
-}
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        return res.status(502).json({
+          error: "No content from AI",
+          raw: data
+        });
+      }
 
-// Main model loop with per-model 429 retry
-for (let i = 0; i < FALLBACK_MODELS.length; i++) {
-  const { id: modelId, timeout: timeoutMs } = FALLBACK_MODELS[i];
+      // Strip markdown fences if model added them
+      const cleaned = content.replace(/```json|```/g, "").trim();
 
-  // First attempt
-  let result = await tryModel(modelId, timeoutMs);
+      let plan;
+      try {
+        plan = JSON.parse(cleaned);
+      } catch (e) {
+        return res.status(502).json({
+          error: "AI returned invalid JSON",
+          content: cleaned
+        });
+      }
 
-  // If 429, wait and retry once
-  if (result.error === "non-ok" && result.statusCode === 429) {
-    // If wait time is more than 8s, skip this model entirely and try next
-if ((result.retryAfter ?? 7) > 8) {
-  diagnostics.push({
-    model: modelId,
-    statusCode: 429,
-    issue: "skipped-long-rate-limit",
-    retryAfter: result.retryAfter
-  });
-  console.log(`Model ${modelId} rate-limited for ${result.retryAfter}s — skipping.`);
-  continue;
-}
-const waitSeconds = Math.min(result.retryAfter ?? 7, 8);
-    const waitMs = Math.ceil(waitSeconds * 1000);
-    console.log(`Model ${modelId} rate-limited. Waiting ${waitSeconds}s then retrying...`);
-    await wait(waitMs);
-    result = await tryModel(modelId, timeoutMs); // second attempt
-  }
+      // Force meta to match what we asked for (AI sometimes drifts)
+      if (!plan.meta) plan.meta = {};
+      plan.meta.units = finalDims.units;
+      plan.meta.outerWidth = finalDims.outerWidth;
+      plan.meta.outerHeight = finalDims.outerHeight;
 
-  // If we got a valid plan, apply snapping and return
-  if (result.plan) {
-    const alignedPlan = alignAndSnapGeometry(result.plan, finalDims);
-    console.log(`Success with model: ${modelId}`);
-    return res.status(200).json(alignedPlan);
-  }
-
-  // Otherwise log the failure and try next model
-  diagnostics.push({
-    model: modelId,
-    ...(result.statusCode ? { statusCode: result.statusCode } : {}),
-    issue: result.error,
-    details: result.details ?? null
-  });
-
-  console.log(`Model ${modelId} failed (${result.error}), trying next...`);
-}
-
-// All models failed
-return res.status(502).json({
-  error: "AI Generation pipeline was unable to complete successfully.",
-  diagnostics: diagnostics
-});
+      console.log(`Success on attempt ${attempt}`);
+      return res.status(200).json(plan);
+    }
 
   } catch (error) {
     return res.status(500).json({ error: error.message });
