@@ -1364,7 +1364,7 @@ export class AreaZone extends Shape {
     this.angle = (this.angle || 0) + angleRad;
   }
 
-    draw(ctx, drawingAppInstance = null) {
+  draw(ctx, drawingAppInstance = null) {
     ctx.save();
     if (this.angle) {
       const cx = this.x + this.width / 2;
@@ -1383,8 +1383,7 @@ export class AreaZone extends Shape {
       return;
     }
 
-    // 1. DYNAMIC UNIT DETECTION & SCALE MATH
-    // Fallback chain: Checks global variables first, then local app parameters, then defaults to 20px per foot
+    // 1. DYNAMIC UNIT DETECTION & DOUBLE-DECIMAL PRECISION SCALE MATH (Image 2 style)
     const appScale = window.AI_UNIT_SCALE || (drawingAppInstance ? drawingAppInstance.aiUnitScale : 20) || 20;
     const appUnits = window.AI_UNITS || (drawingAppInstance ? drawingAppInstance.aiUnits : 'ft') || 'ft';
 
@@ -1392,49 +1391,50 @@ export class AreaZone extends Shape {
     const realH = h / appScale;
     const realArea = realW * realH;
 
-    const unitLabel = appUnits; // 'ft', 'm', or 'cm'
-    const areaLabel = appUnits === 'ft' ? 'sq.ft' : (appUnits === 'm' ? 'm²' : 'cm²');
+    const unitLabel = appUnits; 
+    const areaLabel = appUnits === 'ft' ? 'ft²' : (appUnits === 'm' ? 'm²' : 'cm²'); // Superscript ² like Image 2!
 
-    const widthStr = `W: ${realW.toFixed(1)} ${unitLabel}`;
-    const heightStr = `H: ${realH.toFixed(1)} ${unitLabel}`;
-    const areaStr = `${realArea.toFixed(1)} ${areaLabel}`;
+    // Format with perfect double-decimal precision (.00) matching Image 2
+    const widthStr = `W: ${realW.toFixed(2)} ${unitLabel}`;
+    const heightStr = `H: ${realH.toFixed(2)} ${unitLabel}`;
+    const areaStr = `${realArea.toFixed(2)} ${areaLabel}`;
 
-    // 2. THEME-BASED ROOM STYLING (COGNITIVE PALETTE)
-    let fillStyle = 'rgba(168, 85, 247, 0.03)';  // default faint purple
-    let hatchStyle = 'rgba(168, 85, 247, 0.08)'; // default faint purple
+    // 2. THEME-BASED ROOM STYLING (Rich Cognitive Palette matching Image 2)
+    let fillStyle = 'rgba(168, 85, 247, 0.06)';  // default faint purple
+    let hatchStyle = 'rgba(168, 85, 247, 0.16)'; // default faint purple
     let borderStyle = '#A855F7';
     let isParkingZone = false;
 
     const lowerName = (this.zoneName || '').toLowerCase();
     
     if (lowerName.includes('master bedroom') || lowerName.includes('master bed') || lowerName.includes('bedroom') || lowerName.includes('bed room') || lowerName.includes('bed')) {
-      fillStyle = 'rgba(168, 85, 247, 0.06)';   // Purples for bedrooms
-      hatchStyle = 'rgba(168, 85, 247, 0.12)';
+      fillStyle = 'rgba(168, 85, 247, 0.06)';   // Rich purple theme
+      hatchStyle = 'rgba(168, 85, 247, 0.16)';
       borderStyle = '#A855F7';
     } else if (lowerName.includes('kitchen') || lowerName.includes('pantry')) {
-      fillStyle = 'rgba(245, 158, 11, 0.06)';    // Warm orange/yellow for kitchens
-      hatchStyle = 'rgba(245, 158, 11, 0.12)';
+      fillStyle = 'rgba(245, 158, 11, 0.06)';    // Warm Golden-Orange theme
+      hatchStyle = 'rgba(245, 158, 11, 0.16)';
       borderStyle = '#F59E0B';
     } else if (lowerName.includes('bathroom') || lowerName.includes('bath') || lowerName.includes('toilet') || lowerName.includes('restroom') || lowerName.includes('wc') || lowerName.includes('powder')) {
-      fillStyle = 'rgba(16, 185, 129, 0.06)';    // Clean mint-green for bathrooms
-      hatchStyle = 'rgba(16, 185, 129, 0.12)';
+      fillStyle = 'rgba(16, 185, 129, 0.06)';    // Clean mint green theme
+      hatchStyle = 'rgba(16, 185, 129, 0.16)';
       borderStyle = '#10B981';
     } else if (lowerName.includes('hall') || lowerName.includes('living') || lowerName.includes('dining') || lowerName.includes('lounge') || lowerName.includes('family')) {
-      fillStyle = 'rgba(6, 182, 212, 0.05)';     // Soft cool cyan/blue for open living areas
-      hatchStyle = 'rgba(6, 182, 212, 0.10)';
+      fillStyle = 'rgba(6, 182, 212, 0.06)';     // Cozy Living Cyan theme
+      hatchStyle = 'rgba(6, 182, 212, 0.16)';
       borderStyle = '#06B6D4';
     } else if (lowerName.includes('parking') || lowerName.includes('garage') || lowerName.includes('car')) {
       isParkingZone = true;
-      fillStyle = 'rgba(100, 116, 139, 0.02)';   // Bare slate grey for parking outlines
-      hatchStyle = 'rgba(100, 116, 139, 0.06)';  // Minimal sparse hatches
+      fillStyle = 'rgba(100, 116, 139, 0.02)';   // Slate gray parking outlines
+      hatchStyle = 'rgba(100, 116, 139, 0.05)';  
       borderStyle = '#64748B';
     } else if (lowerName.includes('balcony') || lowerName.includes('utility') || lowerName.includes('garden') || lowerName.includes('outdoor')) {
-      fillStyle = 'rgba(34, 197, 94, 0.04)';     // Fresh green for outdoor zones
-      hatchStyle = 'rgba(34, 197, 94, 0.08)';
+      fillStyle = 'rgba(34, 197, 94, 0.04)';     // Fresh green balcony theme
+      hatchStyle = 'rgba(34, 197, 94, 0.10)';
       borderStyle = '#22C55E';
     } else {
-      fillStyle = 'rgba(148, 163, 184, 0.04)';   // Neutral slate for corridors & lobbies
-      hatchStyle = 'rgba(148, 163, 184, 0.08)';
+      fillStyle = 'rgba(148, 163, 184, 0.04)';   // Neutral corridors
+      hatchStyle = 'rgba(148, 163, 184, 0.10)';
       borderStyle = '#94A3B8';
     }
 
@@ -1442,7 +1442,6 @@ export class AreaZone extends Shape {
     ctx.strokeStyle = borderStyle;
     ctx.lineWidth = this.lineWidth || 1.5;
     
-    // Parking bays get industrial long-dashed borders, habitable rooms get clean dotted/solid dashes
     if (isParkingZone) {
       ctx.setLineDash([8, 6]);
     } else {
@@ -1453,17 +1452,17 @@ export class AreaZone extends Shape {
     ctx.rect(xMin, yMin, w, h);
     ctx.stroke();
 
-    // Fill soft transparent backgrounds
+    // Fill soft background colors
     ctx.fillStyle = fillStyle;
     ctx.fillRect(xMin, yMin, w, h);
 
-    // 4. DRAW ARCHITECTURAL CROSS-HATCHING (Excluding pure parking zones)
+    // 4. DRAW ARCHITECTURAL CROSS-HATCHING (Excluding parking)
     if (!isParkingZone) {
       ctx.strokeStyle = hatchStyle;
-      ctx.lineWidth = 0.75;
+      ctx.lineWidth = 0.75; // Thin, elegant CAD lines
       ctx.setLineDash([]);
       ctx.beginPath();
-      const spacing = 20; // Sparse modern spacing
+      const spacing = 15; // Balanced visual spacing matching Image 2
       for (let i = spacing; i < w + h; i += spacing) {
         ctx.moveTo(xMin + Math.max(0, i - h), yMin + Math.min(h, i));
         ctx.lineTo(xMin + Math.min(w, i), yMin + Math.max(0, i - w));
@@ -1471,21 +1470,20 @@ export class AreaZone extends Shape {
       ctx.stroke();
     }
 
-    // 5. DRAW HIGH-CONTRAST MEASUREMENT BADGES
+    // 5. DRAW HIGH-CONTRAST MEASUREMENT BADGES (Image 2 style)
     const midX = xMin + w / 2;
     const midY = yMin + h / 2;
 
     const showRoomDim = drawingAppInstance ? drawingAppInstance.showRoomDimensions : true;
 
-    // Elegant modern badge size
     const badgeW = 120;
     const badgeH = showRoomDim ? 50 : 25;
     
     if (w > 35 && h > 25) {
-      // Glassmorphism card fill
-      ctx.fillStyle = 'rgba(15, 17, 21, 0.92)';
-      ctx.strokeStyle = borderStyle;
-      ctx.lineWidth = 1.2;
+      // Semi-transparent background allowing hatching to show through! (Image 2 style)
+      ctx.fillStyle = 'rgba(15, 17, 21, 0.72)'; 
+      ctx.strokeStyle = borderStyle; // Colored border matching room color theme!
+      ctx.lineWidth = 1.0;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.roundRect(midX - badgeW / 2, midY - badgeH / 2, badgeW, badgeH, 4);
@@ -1500,17 +1498,16 @@ export class AreaZone extends Shape {
         ctx.textBaseline = 'middle';
         ctx.fillText(this.zoneName.toUpperCase(), midX, midY - badgeH * 0.26);
 
-        // B. Area Display (Clean Rose Accent)
-        ctx.fillStyle = '#F43F5E'; 
+        // B. Area Display (Bright red/pink matching Image 2!)
+        ctx.fillStyle = '#EF4444'; 
         ctx.font = 'bold 10px monospace';
         ctx.fillText(areaStr, midX, midY + badgeH * 0.02);
 
-        // C. Dimensional Coordinates
-        ctx.fillStyle = '#9CA3AF'; 
+        // C. Dimensional Coordinates (Clean light grey/white text)
+        ctx.fillStyle = '#E5E7EB'; 
         ctx.font = '8.5px monospace';
         ctx.fillText(`${widthStr} | ${heightStr}`, midX, midY + badgeH * 0.28);
       } else {
-        // Centered fallback label if dimensions are hidden
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 9px "Space Grotesk", sans-serif';
         ctx.textAlign = 'center';
@@ -1521,6 +1518,7 @@ export class AreaZone extends Shape {
 
     ctx.restore();
   }
+
   serialize() {
     return {
       ...super.serialize(),
