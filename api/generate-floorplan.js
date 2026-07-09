@@ -1,12 +1,12 @@
 // api/generate-floorplan.js
-// Single model: nvidia/nemotron-3-ultra-550b-a55b:free
-// Edge runtime = up to ~30s (needed for this large free model)
+// Forces Edge Runtime compilation on Vercel (Up to 30-second execution)
+// Integrates a Global Time Guardian to self-terminate before Vercel timeouts.
 
 export const config = {
   runtime: "edge",
 };
 
-// ---------- helpers (your proven logic) ----------
+// 1. Helper function: Extract plot size using your exact working regex
 function extractPlotSize(prompt) {
   const m = prompt.match(
     /(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?/i
@@ -26,6 +26,7 @@ function extractPlotSize(prompt) {
   return { units: unit, outerWidth: w, outerHeight: h };
 }
 
+// 2. Helper function: Extract requirements using your exact working rules
 function extractRequirements(prompt) {
   const p = String(prompt || "").toLowerCase();
 
@@ -41,6 +42,7 @@ function extractRequirements(prompt) {
   return { bhk, bathrooms, wantsParking, wantsBalcony };
 }
 
+// 3. Helper function: Default plot configurations
 function defaultPlotForBHK(bhk) {
   if (bhk === 1) return { units: "ft", outerWidth: 20, outerHeight: 30 };
   if (bhk === 2) return { units: "ft", outerWidth: 30, outerHeight: 40 };
@@ -49,7 +51,7 @@ function defaultPlotForBHK(bhk) {
   return { units: "ft", outerWidth: 30, outerHeight: 40 };
 }
 
-// Snap numbers so walls/rooms/labels align (fixes messy measurement drift)
+// 4. Non-Destructive Geometry Snapper to align rooms & walls perfectly on integer bounds
 function snapGeometryToCleanGrid(plan, finalDims) {
   if (!plan) return plan;
 
@@ -86,7 +88,7 @@ function snapGeometryToCleanGrid(plan, finalDims) {
     });
   }
 
-  // Keep wallIndex schema; only snap position/width numbers
+  // Round relative positions while fully preserving your front-end's wallIndex mapping
   if (Array.isArray(plan.doors)) {
     plan.doors.forEach((door) => {
       if (door.position !== undefined) door.position = snap(door.position);
@@ -108,21 +110,22 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function parseRetryAfterSeconds(rawText, fallback = 8) {
+function parseRetryAfterSeconds(rawText, fallback = 6) {
   try {
     const data = JSON.parse(rawText);
     const sec =
       data?.error?.metadata?.retry_after_seconds ??
       data?.error?.metadata?.retry_after_seconds_raw;
-    if (typeof sec === "number" && sec > 0) return Math.min(15, Math.ceil(sec));
+    if (typeof sec === "number" && sec > 0) return Math.min(10, Math.ceil(sec));
   } catch (_) {}
   return fallback;
 }
 
-// ---------- ONLY THIS MODEL ----------
 const MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 export default async function handler(req) {
+  const startTime = Date.now(); // Track initial execution moment
+
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, PATCH, DELETE",
@@ -237,11 +240,20 @@ Plot size to use:
 Output ONLY the JSON in the schema.
 `.trim();
 
-    // Up to 2 attempts: first call, then one 429-retry after wait
     const diagnostics = [];
     let lastRaw = null;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
+      // THE GLOBAL TIME GUARDIAN: Ensure we have at least 4 seconds remaining
+      const elapsed = Date.now() - startTime;
+      const timeLeft = 25000 - elapsed; // 25s target window
+
+      if (timeLeft < 4000) {
+        console.warn("Time budget exhausted. Gracefully aborting before Vercel timeout.");
+        diagnostics.push({ issue: "Self-terminated to prevent Vercel 504 crash" });
+        break;
+      }
+
       try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
@@ -259,6 +271,8 @@ Output ONLY the JSON in the schema.
               { role: "user", content: userMessage },
             ],
           }),
+          // This timeout adapts dynamically to whatever time is left in our Vercel window!
+          signal: AbortSignal.timeout(timeLeft), 
         });
 
         const rawText = await response.text();
@@ -266,21 +280,25 @@ Output ONLY the JSON in the schema.
 
         // Rate limit: wait and retry once
         if (response.status === 429 && attempt === 1) {
-          const waitSec = parseRetryAfterSeconds(rawText, 8);
-          diagnostics.push({
-            model: MODEL,
-            attempt,
-            statusCode: 429,
-            action: `wait ${waitSec}s then retry`,
-          });
-          await sleep(waitSec * 1000);
-          continue;
+          const waitSec = parseRetryAfterSeconds(rawText, 6);
+          
+          // Verify we have enough time left to sleep and call the API again
+          if (Date.now() - startTime + (waitSec * 1000) < 21000) {
+            diagnostics.push({
+              model: MODEL,
+              attempt,
+              statusCode: 429,
+              action: `waiting ${waitSec}s then retry`,
+            });
+            await sleep(waitSec * 1000);
+            continue;
+          }
         }
 
         if (!response.ok) {
           return new Response(
             JSON.stringify({
-              error: "OpenRouter / Nemotron request failed",
+              error: "OpenRouter request returned error status",
               model: MODEL,
               statusCode: response.status,
               details: rawText,
@@ -329,13 +347,14 @@ Output ONLY the JSON in the schema.
           );
         }
 
-        // Force correct meta + snap coordinates (measurement fix)
+        // Apply Snap Grid Alignment (snaps coordinates to whole integers)
         const alignedPlan = snapGeometryToCleanGrid(plan, finalDims);
 
         return new Response(JSON.stringify(alignedPlan), {
           status: 200,
           headers: corsHeaders,
         });
+
       } catch (err) {
         diagnostics.push({
           model: MODEL,
@@ -343,23 +362,24 @@ Output ONLY the JSON in the schema.
           issue: err.message,
         });
 
-        if (attempt === 1) {
-          await sleep(2000);
+        if (attempt === 1 && (Date.now() - startTime < 18000)) {
+          await sleep(1500);
           continue;
         }
+        break;
       }
     }
 
     return new Response(
       JSON.stringify({
-        error:
-          "Nemotron failed after retries (rate limit, degraded, or timeout). Wait 30–60s and try once more.",
+        error: "AI generation took too long or servers are busy. Please wait a few seconds and try again.",
         model: MODEL,
         diagnostics,
         lastRaw,
       }),
       { status: 502, headers: corsHeaders }
     );
+
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
