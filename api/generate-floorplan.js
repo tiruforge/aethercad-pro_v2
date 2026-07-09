@@ -174,11 +174,11 @@ function sanitizeAndAlignFloorplan(plan, outerWidth, outerHeight) {
   return plan;
 }
 
-// ACTIVE AND PROVEN FREE ENDPOINTS ON OPENROUTER
+// TIME-BUDGETED MODEL LIST FOR HIGH RELIABILITY
+// Total worst-case execution time: 8000ms + 1500ms = 9.5 seconds (Safely under Vercel's 10s cutoff!)
 const FALLBACK_MODELS = [
-  "nvidia/nemotron-3-ultra-550b-a55b:free", // #1 Priority: User-proven stable working model!
-  "nvidia/nemotron-4-340b-instruct:free",   // #2 Priority: Heavy duty sibling backup
-  "meta-llama/llama-3.3-70b-instruct:free"  // #3 Priority: Venice backup
+  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 8000 }, // Primary: User's proven 550B spatial model
+  { id: "meta-llama/llama-3.2-3b-instruct:free", timeout: 1500 }   // Secondary: Ultra-fast, high-availability free backup
 ];
 
 export default async function handler(req, res) {
@@ -263,8 +263,9 @@ Required JSON Structure format:
   const diagnostics = [];
 
   for (let i = 0; i < FALLBACK_MODELS.length; i++) {
-    const currentModel = FALLBACK_MODELS[i];
-    console.log(`Attempting generation using model ${i + 1}/${FALLBACK_MODELS.length}: ${currentModel}`);
+    const currentModel = FALLBACK_MODELS[i].id;
+    const currentTimeout = FALLBACK_MODELS[i].timeout;
+    console.log(`Attempting generation using model ${i + 1}/${FALLBACK_MODELS.length}: ${currentModel} (Timeout: ${currentTimeout}ms)`);
 
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -281,9 +282,9 @@ Required JSON Structure format:
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a detailed floorplan layout for prompt: "${prompt}". Remember to only return the valid raw JSON schema requested.` }
           ],
-          temperature: 0.1 // Low temperature ensures solid adherence to coordinates
+          temperature: 0.1 // Kept low for perfect JSON structure compliance
         }),
-        signal: AbortSignal.timeout(4500) // Fast failover cycling
+        signal: AbortSignal.timeout(currentTimeout)
       });
 
       const rawText = await response.text();
