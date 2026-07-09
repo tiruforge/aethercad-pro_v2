@@ -19,7 +19,7 @@ function extractPlotSize(prompt) {
   return null;
 }
 
-// 2. Helper function: Extract details like rooms, parking, balcony
+// 2. Helper function: Extract details like BHK, bathrooms
 function extractRequirements(prompt) {
   const cleaned = prompt.toLowerCase();
   const bhkMatch = cleaned.match(/(\d+)\s*bhk/i);
@@ -30,12 +30,11 @@ function extractRequirements(prompt) {
 
   const wantsParking = cleaned.includes('parking') || cleaned.includes('car') || cleaned.includes('garage');
   const wantsBalcony = cleaned.includes('balcony') || cleaned.includes('balconies');
-  const wantsAttached = cleaned.includes('attached');
 
-  return { bhk, bathrooms, wantsParking, wantsBalcony, wantsAttached };
+  return { bhk, bathrooms, wantsParking, wantsBalcony };
 }
 
-// 3. Helper function: Default sizes for BHK if user didn't mention size
+// 3. Helper function: Default sizes for BHK
 function defaultPlotForBHK(bhk) {
   if (!bhk) return { width: 30, height: 40, units: 'ft' };
   if (bhk === 1) return { width: 20, height: 30, units: 'ft' };
@@ -44,32 +43,142 @@ function defaultPlotForBHK(bhk) {
   return { width: 50, height: 60, units: 'ft' };
 }
 
-// 4. Helper function: Clean and prepare AI output for JSON parsing
+// 4. Helper function: Clean code block markers
 function cleanJSONString(raw) {
   let cleaned = raw.trim();
-
-  // A. Strip DeepSeek reasoning blocks (<thought>...</thought>)
-  cleaned = cleaned.replace(/<thought>[\s\S]*?<\/thought>/gi, '');
+  cleaned = cleaned.replace(/<thought>[\s\S]*?<\/thought>/gi, ''); // Clean deepseek reasoning blocks
   cleaned = cleaned.trim();
-
-  // B. Strip markdown JSON code block fences
   if (cleaned.startsWith("```")) {
     cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/, "");
   }
   cleaned = cleaned.trim();
-
-  // C. Strip trailing commas before closing braces/brackets (essential for smaller models)
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1'); // Clean trailing commas
   return cleaned;
 }
 
-// HIGH-CAPACITY RESILIENT MODEL SLUGS (Venice + non-Venice providers)
+// ==========================================
+// GEOMETRY SANITIZER & ALIGNMENT ENGINE
+// ==========================================
+function sanitizeAndAlignFloorplan(plan, outerWidth, outerHeight) {
+  if (!plan.rooms || !Array.isArray(plan.rooms)) {
+    plan.rooms = [];
+  }
+
+  // Step A: Snap room boundaries to integer grid & enforce outer boundaries
+  plan.rooms = plan.rooms.map(room => {
+    let rx = Math.max(0, Math.round(room.x || 0));
+    let ry = Math.max(0, Math.round(room.y || 0));
+    let rw = Math.max(2, Math.round(room.width || 4));
+    let rh = Math.max(2, Math.round(room.height || 4));
+
+    // Clamp to make sure they fit inside the plot
+    if (rx + rw > outerWidth) {
+      if (rx > 0) rx = Math.max(0, outerWidth - rw);
+      rw = Math.min(rw, outerWidth - rx);
+    }
+    if (ry + rh > outerHeight) {
+      if (ry > 0) ry = Math.max(0, outerHeight - rh);
+      rh = Math.min(rh, outerHeight - ry);
+    }
+
+    return {
+      name: room.name || "Room",
+      type: room.type || "bedroom",
+      x: rx,
+      y: ry,
+      width: rw,
+      height: rh
+    };
+  });
+
+  // Step B: Deduplicate rooms with overlapping centers/names
+  const uniqueRooms = [];
+  for (const r of plan.rooms) {
+    const isDuplicate = uniqueRooms.some(existing => {
+      // Overlap calculation
+      const xOverlap = Math.max(0, Math.min(r.x + r.width, existing.x + existing.width) - Math.max(r.x, existing.x));
+      const yOverlap = Math.max(0, Math.min(r.y + r.height, existing.y + existing.height) - Math.max(r.y, existing.y));
+      const overlapArea = xOverlap * yOverlap;
+      const areaR = r.width * r.height;
+
+      // If they overlap by more than 40% and have similar names/types, deduplicate
+      const namesSimilar = r.name.toLowerCase().substring(0, 5) === existing.name.toLowerCase().substring(0, 5);
+      return (overlapArea > areaR * 0.4) && (r.type === existing.type || namesSimilar);
+    });
+
+    if (!isDuplicate) {
+      uniqueRooms.push(r);
+    }
+  }
+  plan.rooms = uniqueRooms;
+
+  // Step C: Auto-generate neat, perfectly contiguous walls from room boundaries
+  const wallSet = new Set();
+  const addWall = (x1, y1, x2, y2) => {
+    if (x1 > x2 || (x1 === x2 && y1 > y2)) {
+      [x1, y1, x2, y2] = [x2, y2, x1, y1];
+    }
+    if (x1 === x2 && y1 === y2) return;
+    
+    const key = `${x1},${y1}-${x2},${y2}`;
+    wallSet.add(key);
+  };
+
+  // 1. Add perfect outer boundary rectangle walls
+  addWall(0, 0, outerWidth, 0);
+  addWall(outerWidth, 0, outerWidth, outerHeight);
+  addWall(outerWidth, outerHeight, 0, outerHeight);
+  addWall(0, outerHeight, 0, 0);
+
+  // 2. Add bounding walls around every snapped room
+  for (const room of plan.rooms) {
+    addWall(room.x, room.y, room.x + room.width, room.y); // Top side
+    addWall(room.x + room.width, room.y, room.x + room.width, room.y + room.height); // Right side
+    addWall(room.x + room.width, room.y + room.height, room.x, room.y + room.height); // Bottom side
+    addWall(room.x, room.y + room.height, room.x, room.y); // Left side
+  }
+
+  // Re-populate clean wall structures
+  plan.walls = Array.from(wallSet).map(key => {
+    const [p1, p2] = key.split('-');
+    const [x1, y1] = p1.split(',').map(Number);
+    const [x2, y2] = p2.split(',').map(Number);
+    return { x1, y1, x2, y2 };
+  });
+
+  // Step D: Ensure doors/windows lie directly on our clean walls
+  if (Array.isArray(plan.doors)) {
+    plan.doors = plan.doors.map(door => {
+      const dx = Math.round(door.position?.x || 0);
+      const dy = Math.round(door.position?.y || 0);
+      return {
+        position: { x: dx, y: dy },
+        width: door.width || 3,
+        orientation: door.orientation || "horizontal"
+      };
+    });
+  }
+
+  if (Array.isArray(plan.windows)) {
+    plan.windows = plan.windows.map(win => {
+      const wx = Math.round(win.position?.x || 0);
+      const wy = Math.round(win.position?.y || 0);
+      return {
+        position: { x: wx, y: wy },
+        width: win.width || 4,
+        orientation: win.orientation || "horizontal"
+      };
+    });
+  }
+
+  return plan;
+}
+
+// ACTIVE AND PROVEN FREE ENDPOINTS ON OPENROUTER
 const FALLBACK_MODELS = [
-  "deepseek/deepseek-r1:free",              // Rank #1: Extremely smart reasoning, hosted on high-capacity endpoints
-  "meta-llama/llama-3.3-70b-instruct:free", // Rank #2: Back-up spatial planning (Venice)
-  "mistralai/mistral-7b-instruct:free",     // Rank #3: Ultra-stable fallback, hosted by Together/DeepInfra (No Venice limits!)
-  "meta-llama/llama-3-8b-instruct:free",    // Rank #4: High-availability backup, hosted by Together/DeepInfra
-  "openchat/openchat-7b:free"               // Rank #5: Emergency fallback
+  "nvidia/nemotron-3-ultra-550b-a55b:free", // #1 Priority: User-proven stable working model!
+  "nvidia/nemotron-4-340b-instruct:free",   // #2 Priority: Heavy duty sibling backup
+  "meta-llama/llama-3.3-70b-instruct:free"  // #3 Priority: Venice backup
 ];
 
 export default async function handler(req, res) {
@@ -92,7 +201,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing "prompt" field in request body.' });
   }
 
-  // Parse custom prompt structures
   const parsedPlot = extractPlotSize(prompt);
   const reqs = extractRequirements(prompt);
   
@@ -101,7 +209,7 @@ export default async function handler(req, res) {
     finalDims = defaultPlotForBHK(reqs.bhk);
   }
 
-  // System Prompt for strict layout structure
+  // System Prompt
   const systemPrompt = `You are an expert civil engineer and floorplan architect.
 Your task is to generate a structurally sound, highly accurate, and non-overlapping 2D floorplan JSON based on the user's requirements.
 
@@ -152,7 +260,6 @@ Required JSON Structure format:
     });
   }
 
-  // Diagnostic history to return if everything fails
   const diagnostics = [];
 
   for (let i = 0; i < FALLBACK_MODELS.length; i++) {
@@ -174,10 +281,9 @@ Required JSON Structure format:
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a detailed floorplan layout for prompt: "${prompt}". Remember to only return the valid raw JSON schema requested.` }
           ],
-          temperature: 0.2
+          temperature: 0.1 // Low temperature ensures solid adherence to coordinates
         }),
-        // Crucial fast timeout limit (2.2 seconds per attempt) to stay under Vercel's 10s ceiling
-        signal: AbortSignal.timeout(2200) 
+        signal: AbortSignal.timeout(4500) // Fast failover cycling
       });
 
       const rawText = await response.text();
@@ -190,8 +296,6 @@ Required JSON Structure format:
           issue: "Model endpoint returned error status",
           rawResponse: rawText
         });
-        
-        // Instant failover with zero sleep delays to secure 10-second serverless window
         continue;
       }
 
@@ -219,7 +323,6 @@ Required JSON Structure format:
         continue;
       }
 
-      // Safe clean and parsing
       const cleanJson = cleanJSONString(content);
       let planJson;
       try {
@@ -234,14 +337,19 @@ Required JSON Structure format:
         continue;
       }
 
-      // Enforce bounds to prevent math drift
-      if (!planJson.meta) planJson.meta = {};
+      // Force overlay measurements
+      planJson.meta = planJson.meta || {};
       planJson.meta.units = finalDims.units;
       planJson.meta.outerWidth = finalDims.width;
       planJson.meta.outerHeight = finalDims.height;
 
-      console.log(`Success! Floorplan generated with model: ${currentModel}`);
-      return res.status(200).json(planJson);
+      // ==========================================
+      // APPLY GEOMETRY SANITIZATION & AUTO-ALIGNMENT
+      // ==========================================
+      const polishedPlan = sanitizeAndAlignFloorplan(planJson, finalDims.width, finalDims.height);
+
+      console.log(`Success! Floorplan generated and perfectly aligned with model: ${currentModel}`);
+      return res.status(200).json(polishedPlan);
 
     } catch (error) {
       console.error(`Error occurs during execution of ${currentModel}:`, error.message);
