@@ -3,7 +3,6 @@
 // 1. Helper function: Extract plot size from prompt using regex
 function extractPlotSize(prompt) {
   const cleaned = prompt.toLowerCase();
-  // Matches patterns like "30x40", "30 x 40 ft", "30ft x 40ft", "30' x 40'", "12m x 9m"
   const match = cleaned.match(/(\d+)\s*(?:ft|'|m|cm)?\s*(?:x|×|\*|by|to)\s*(\d+)\s*(ft|'|m|cm)?/i);
   
   if (match) {
@@ -54,12 +53,12 @@ function cleanJSONString(raw) {
   return cleaned.trim();
 }
 
-// HIGHLY OPTIMIZED FALLBACK MODEL CHAIN FROM YOUR MODEL RESEARCH
+// RE-OPTIMIZED FALLBACK MODEL LIST
 const FALLBACK_MODELS = [
   "meta-llama/llama-3.3-70b-instruct:free",    // Rank #1: Best logic, instruction adherence
   "qwen/qwen-2.5-coder-32b-instruct:free",     // Rank #2: Best structural coding and JSON output
   "nousresearch/hermes-3-llama-3.1-405b:free",  // Rank #3: Massive intelligence fallback (slow but highly accurate)
-  "qwen/qwen-2.5-72b-instruct:free"            // Rank #4: Excellent alternative high-capacity reasoning model
+  "google/gemma-2-9b-it:free"                  // Rank #4: Ultra-reliable, fast, 100% active free fallback
 ];
 
 export default async function handler(req, res) {
@@ -142,7 +141,9 @@ Required JSON Structure format:
     });
   }
 
-  // Iterate over models to handle rate limits / 429s / down times
+  // Diagnostic history to return if everything fails
+  const diagnostics = [];
+
   for (let i = 0; i < FALLBACK_MODELS.length; i++) {
     const currentModel = FALLBACK_MODELS[i];
     console.log(`Attempting generation using model ${i + 1}/${FALLBACK_MODELS.length}: ${currentModel}`);
@@ -153,7 +154,7 @@ Required JSON Structure format:
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://aethercad-pro-v2.vercel.app", // Custom header preventing rate limiting on OpenRouter
+          "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
           "X-Title": "AetherCAD Pro v2"
         },
         body: JSON.stringify({
@@ -162,90 +163,99 @@ Required JSON Structure format:
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a detailed floorplan layout for prompt: "${prompt}". Remember to only return the valid raw JSON schema requested.` }
           ],
-          temperature: 0.2 // Lower temp = more predictable JSON compliance
+          temperature: 0.2
         }),
-        signal: AbortSignal.timeout(15000) // 15 seconds timeout per model attempt
+        signal: AbortSignal.timeout(15000) // 15 seconds limit
       });
 
       const rawText = await response.text();
-      console.log(`Received status code ${response.status} from OpenRouter using model ${currentModel}`);
+      console.log(`Received status code ${response.status} from model ${currentModel}`);
 
       if (!response.ok) {
-        console.warn(`Model ${currentModel} returned error: ${rawText}`);
-        // If not the last model, wait briefly and try the next fallback
+        diagnostics.push({
+          model: currentModel,
+          statusCode: response.status,
+          issue: "Model endpoint returned error status",
+          rawResponse: rawText
+        });
+        
         if (i < FALLBACK_MODELS.length - 1) {
-          console.log("Waiting 2 seconds before attempting fallback model...");
+          console.log("Waiting 2 seconds before fallback...");
           await new Promise(resolve => setTimeout(resolve, 2000));
           continue;
         }
-        return res.status(502).json({
-          error: `OpenRouter returned status code ${response.status}`,
-          details: rawText
-        });
+        break; // exit loop if we are out of fallback models
       }
 
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(rawText);
       } catch (err) {
-        console.error(`Failed to parse response body as JSON: ${rawText}`);
-        if (i < FALLBACK_MODELS.length - 1) {
-          continue;
-        }
-        return res.status(502).json({
-          error: "Invalid JSON response from OpenRouter provider",
-          details: rawText
+        diagnostics.push({
+          model: currentModel,
+          statusCode: response.status,
+          issue: "Failed to parse API response as JSON",
+          rawResponse: rawText
         });
+        if (i < FALLBACK_MODELS.length - 1) continue;
+        break;
       }
 
       const content = parsedResponse?.choices?.[0]?.message?.content;
       if (!content) {
-        console.warn(`Model ${currentModel} returned empty content object:`, JSON.stringify(parsedResponse));
-        if (i < FALLBACK_MODELS.length - 1) {
-          continue;
-        }
-        return res.status(502).json({
-          error: "Empty message payload received from AI model.",
-          details: parsedResponse
+        diagnostics.push({
+          model: currentModel,
+          statusCode: response.status,
+          issue: "Empty or null content payload returned from OpenRouter choices",
+          rawResponse: parsedResponse
         });
+        if (i < FALLBACK_MODELS.length - 1) continue;
+        break;
       }
 
-      // Safe parse AI generated JSON code blocks
+      // Parse and check AI-generated structure
       const cleanJson = cleanJSONString(content);
       let planJson;
       try {
         planJson = JSON.parse(cleanJson);
       } catch (e) {
-        console.error(`AI generated content could not be parsed as final floorplan JSON: ${cleanJson}`);
-        if (i < FALLBACK_MODELS.length - 1) {
-          continue;
-        }
-        return res.status(502).json({
-          error: "AI response failed JSON structure parsing rules.",
-          details: content
+        diagnostics.push({
+          model: currentModel,
+          statusCode: response.status,
+          issue: "AI content was generated but could not be compiled into standard JSON",
+          rawResponse: content
         });
+        if (i < FALLBACK_MODELS.length - 1) continue;
+        break;
       }
 
-      // Enforce outer bounds to prevent AI drift
+      // Force overlay measurements to avoid drift
       if (!planJson.meta) planJson.meta = {};
       planJson.meta.units = finalDims.units;
       planJson.meta.outerWidth = finalDims.width;
       planJson.meta.outerHeight = finalDims.height;
 
-      console.log("Floorplan layout successfully compiled and sanitized!");
+      console.log(`Success! Floorplan generated with model: ${currentModel}`);
       return res.status(200).json(planJson);
 
     } catch (error) {
-      console.error(`Network or critical error with model ${currentModel}:`, error.message);
+      console.error(`Error occurs during execution of ${currentModel}:`, error.message);
+      diagnostics.push({
+        model: currentModel,
+        issue: "Network Timeout or Internal function crash",
+        errorMessage: error.message
+      });
       if (i < FALLBACK_MODELS.length - 1) {
-        console.log("Waiting 2 seconds before retry/fallback...");
         await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
-      return res.status(500).json({
-        error: "Internal Server / Connection Error with OpenRouter API.",
-        details: error.message
-      });
     }
   }
+
+  // IF WE REACH HERE, ALL MODELS HAVE FAILED
+  console.error("All fallback models exhausted. Returning diagnostic history.");
+  return res.status(502).json({
+    error: "AI Generation pipeline was unable to complete successfully.",
+    diagnostics: diagnostics
+  });
 }
