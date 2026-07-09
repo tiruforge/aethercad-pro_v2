@@ -100,11 +100,12 @@ function alignAndSnapGeometry(plan, finalDims) {
   return plan;
 }
 
-// Verified working free models on OpenRouter (in priority order)
+// Free models across DIFFERENT providers (not all Venice) to avoid single-provider rate limits
 const FALLBACK_MODELS = [
-  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 12000 }, // Priority #1: balanced quality
-  { id: "nousresearch/hermes-3-llama-3.1-405b:free", timeout: 12000 }, // Priority #2: max quality, slower
-  { id: "qwen/qwen-2.5-72b-instruct:free", timeout: 8000 } // Priority #3: fast structured JSON
+  { id: "mistralai/mistral-7b-instruct:free", timeout: 12000 },       // Provider: Mistral — fast, reliable
+  { id: "microsoft/phi-3-medium-128k-instruct:free", timeout: 12000 }, // Provider: Microsoft — good JSON
+  { id: "meta-llama/llama-3.1-8b-instruct:free", timeout: 10000 },    // Provider: multiple — small but fast
+  { id: "google/gemma-2-9b-it:free", timeout: 10000 }                 // Provider: Google — good instruction following
 ];
 
 export default async function handler(req, res) {
@@ -277,7 +278,18 @@ for (let i = 0; i < FALLBACK_MODELS.length; i++) {
 
   // If 429, wait and retry once
   if (result.error === "non-ok" && result.statusCode === 429) {
-    const waitSeconds = Math.min(result.retryAfter ?? 7, 10); // cap at 10s
+    // If wait time is more than 8s, skip this model entirely and try next
+if ((result.retryAfter ?? 7) > 8) {
+  diagnostics.push({
+    model: modelId,
+    statusCode: 429,
+    issue: "skipped-long-rate-limit",
+    retryAfter: result.retryAfter
+  });
+  console.log(`Model ${modelId} rate-limited for ${result.retryAfter}s — skipping.`);
+  continue;
+}
+const waitSeconds = Math.min(result.retryAfter ?? 7, 8);
     const waitMs = Math.ceil(waitSeconds * 1000);
     console.log(`Model ${modelId} rate-limited. Waiting ${waitSeconds}s then retrying...`);
     await wait(waitMs);
