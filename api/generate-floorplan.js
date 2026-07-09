@@ -1,5 +1,9 @@
 // api/generate-floorplan.js
 
+export const config = {
+  runtime: 'edge', // Bypasses the 10-second limit, allowing up to 30 seconds of processing!
+};
+
 // 1. Helper function: Extract plot size from prompt using regex
 function extractPlotSize(prompt) {
   const cleaned = prompt.toLowerCase();
@@ -95,13 +99,11 @@ function sanitizeAndAlignFloorplan(plan, outerWidth, outerHeight) {
   const uniqueRooms = [];
   for (const r of plan.rooms) {
     const isDuplicate = uniqueRooms.some(existing => {
-      // Overlap calculation
       const xOverlap = Math.max(0, Math.min(r.x + r.width, existing.x + existing.width) - Math.max(r.x, existing.x));
       const yOverlap = Math.max(0, Math.min(r.y + r.height, existing.y + existing.height) - Math.max(r.y, existing.y));
       const overlapArea = xOverlap * yOverlap;
       const areaR = r.width * r.height;
 
-      // If they overlap by more than 40% and have similar names/types, deduplicate
       const namesSimilar = r.name.toLowerCase().substring(0, 5) === existing.name.toLowerCase().substring(0, 5);
       return (overlapArea > areaR * 0.4) && (r.type === existing.type || namesSimilar);
     });
@@ -174,31 +176,41 @@ function sanitizeAndAlignFloorplan(plan, outerWidth, outerHeight) {
   return plan;
 }
 
-// TIME-BUDGETED MODEL LIST FOR HIGH RELIABILITY
-// Total worst-case execution time: 8000ms + 1500ms = 9.5 seconds (Safely under Vercel's 10s cutoff!)
+// COGNITIVE MODEL REGISTRY WITH AMPLE TIME BUDGETS
 const FALLBACK_MODELS = [
-  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 8000 }, // Primary: User's proven 550B spatial model
-  { id: "meta-llama/llama-3.2-3b-instruct:free", timeout: 1500 }   // Secondary: Ultra-fast, high-availability free backup
+  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 22000 }, // Primary: User's proven 550B spatial model (Now allowed 22 seconds!)
+  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 5000 },  // Secondary: Venice fallback (5 seconds)
+  { id: "meta-llama/llama-3.2-3b-instruct:free", timeout: 2000 }    // Tertiary: Rapid low-latency fallback (2 seconds)
 ];
 
-export default async function handler(req, res) {
-  // Setup CORS Headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+export default async function handler(req) {
+  // Setup standard CORS Headers for Edge Runtime
+  const corsHeaders = {
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+    'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
+    'Content-Type': 'application/json'
+  };
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed. Use POST.' });
+    return new Response(JSON.stringify({ error: 'Method Not Allowed. Use POST.' }), { status: 405, headers: corsHeaders });
   }
 
-  const { prompt } = req.body;
+  let body;
+  try {
+    body = await req.json();
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Invalid JSON request body.' }), { status: 400, headers: corsHeaders });
+  }
+
+  const { prompt } = body;
   if (!prompt) {
-    return res.status(400).json({ error: 'Missing "prompt" field in request body.' });
+    return new Response(JSON.stringify({ error: 'Missing "prompt" field.' }), { status: 400, headers: corsHeaders });
   }
 
   const parsedPlot = extractPlotSize(prompt);
@@ -209,7 +221,6 @@ export default async function handler(req, res) {
     finalDims = defaultPlotForBHK(reqs.bhk);
   }
 
-  // System Prompt
   const systemPrompt = `You are an expert civil engineer and floorplan architect.
 Your task is to generate a structurally sound, highly accurate, and non-overlapping 2D floorplan JSON based on the user's requirements.
 
@@ -253,11 +264,10 @@ Required JSON Structure format:
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    console.error("Missing OpenRouter Key in Environment Variables.");
-    return res.status(500).json({ 
+    return new Response(JSON.stringify({ 
       error: "API Key Configuration Error.", 
       details: "OPENROUTER_API_KEY environment variable is not defined on the server." 
-    });
+    }), { status: 500, headers: corsHeaders });
   }
 
   const diagnostics = [];
@@ -265,7 +275,7 @@ Required JSON Structure format:
   for (let i = 0; i < FALLBACK_MODELS.length; i++) {
     const currentModel = FALLBACK_MODELS[i].id;
     const currentTimeout = FALLBACK_MODELS[i].timeout;
-    console.log(`Attempting generation using model ${i + 1}/${FALLBACK_MODELS.length}: ${currentModel} (Timeout: ${currentTimeout}ms)`);
+    console.log(`Attempting Edge compilation using model ${i + 1}/${FALLBACK_MODELS.length}: ${currentModel} (Timeout: ${currentTimeout}ms)`);
 
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -282,7 +292,7 @@ Required JSON Structure format:
             { role: "system", content: systemPrompt },
             { role: "user", content: `Generate a detailed floorplan layout for prompt: "${prompt}". Remember to only return the valid raw JSON schema requested.` }
           ],
-          temperature: 0.1 // Kept low for perfect JSON structure compliance
+          temperature: 0.1
         }),
         signal: AbortSignal.timeout(currentTimeout)
       });
@@ -344,13 +354,11 @@ Required JSON Structure format:
       planJson.meta.outerWidth = finalDims.width;
       planJson.meta.outerHeight = finalDims.height;
 
-      // ==========================================
-      // APPLY GEOMETRY SANITIZATION & AUTO-ALIGNMENT
-      // ==========================================
+      // Apply geometry alignment andContiguous wall snapping
       const polishedPlan = sanitizeAndAlignFloorplan(planJson, finalDims.width, finalDims.height);
 
       console.log(`Success! Floorplan generated and perfectly aligned with model: ${currentModel}`);
-      return res.status(200).json(polishedPlan);
+      return new Response(JSON.stringify(polishedPlan), { status: 200, headers: corsHeaders });
 
     } catch (error) {
       console.error(`Error occurs during execution of ${currentModel}:`, error.message);
@@ -363,10 +371,10 @@ Required JSON Structure format:
     }
   }
 
-  // IF WE REACH HERE, ALL MODELS HAVE FAILED
-  console.error("All fallback models exhausted. Returning diagnostic history.");
-  return res.status(502).json({
+  // If all models fail, return full diagnostic history
+  console.error("All fallback models exhausted on Edge compilation.");
+  return new Response(JSON.stringify({
     error: "AI Generation pipeline was unable to complete successfully.",
     diagnostics: diagnostics
-  });
+  }), { status: 502, headers: corsHeaders });
 }
