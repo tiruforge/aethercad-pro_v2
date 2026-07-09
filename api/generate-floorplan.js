@@ -100,10 +100,11 @@ function alignAndSnapGeometry(plan, finalDims) {
   return plan;
 }
 
-// Highly reliable working free models
+// Verified working free models on OpenRouter (in priority order)
 const FALLBACK_MODELS = [
-  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 7500 }, // Priority #1: User's working model (allowed 7.5s)
-  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 2000 }  // Priority #2: Venice backup (allowed 2s)
+  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 12000 }, // Priority #1: balanced quality
+  { id: "nousresearch/hermes-3-llama-3.1-405b:free", timeout: 12000 }, // Priority #2: max quality, slower
+  { id: "qwen/qwen-2.5-72b-instruct:free", timeout: 8000 } // Priority #3: fast structured JSON
 ];
 
 export default async function handler(req, res) {
@@ -199,69 +200,113 @@ Plot size to use:
 Output ONLY the JSON in the schema.
 `.trim();
 
-    const diagnostics = [];
+   const diagnostics = [];
 
-    // Cycle fallback models under standard Node runtime
-    for (let i = 0; i < FALLBACK_MODELS.length; i++) {
-      const currentModel = FALLBACK_MODELS[i].id;
-      const currentTimeout = FALLBACK_MODELS[i].timeout;
+// Helper: wait ms milliseconds
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-      try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
-            "X-Title": "AetherCAD Pro v2"
-          },
-          body: JSON.stringify({
-            model: currentModel,
-            temperature: 0.2,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage }
-            ],
-          }),
-          signal: AbortSignal.timeout(currentTimeout)
-        });
+// Helper: attempt one model call, returns { plan } on success or { error, statusCode, details } on failure
+async function tryModel(modelId, timeoutMs) {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
+      "X-Title": "AetherCAD Pro v2"
+    },
+    body: JSON.stringify({
+      model: modelId,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage }
+      ],
+    }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
 
-        const rawText = await response.text();
+  const rawText = await response.text();
 
-        if (!response.ok) {
-          diagnostics.push({ model: currentModel, statusCode: response.status, details: rawText });
-          continue;
-        }
+  if (!response.ok) {
+    // Try to extract retry_after_seconds from OpenRouter 429 response
+    let retryAfter = null;
+    try {
+      const errData = JSON.parse(rawText);
+      retryAfter = errData?.error?.metadata?.retry_after_seconds ?? null;
+    } catch (_) {}
+    return {
+      error: "non-ok",
+      statusCode: response.status,
+      details: rawText,
+      retryAfter
+    };
+  }
 
-        let parsedData = JSON.parse(rawText);
-        const content = parsedData?.choices?.[0]?.message?.content;
-        
-        if (!content) {
-          diagnostics.push({ model: currentModel, issue: "Empty response content" });
-          continue;
-        }
+  let parsedData;
+  try {
+    parsedData = JSON.parse(rawText);
+  } catch (_) {
+    return { error: "invalid-json", details: rawText };
+  }
 
-        // Clean up markdown block fences if present
-        const cleaned = content.replace(/```json|```/g, "").trim();
-        let plan = JSON.parse(cleaned);
+  const content = parsedData?.choices?.[0]?.message?.content;
+  if (!content) {
+    return { error: "no-content", details: rawText };
+  }
 
-        // Apply non-destructive coordinate snapping
-        const alignedPlan = alignAndSnapGeometry(plan, finalDims);
+  // Clean markdown fences if present
+  const cleaned = content.replace(/```json|```/g, "").trim();
 
-        console.log(`Success! Compiled layout with model: ${currentModel}`);
-        return res.status(200).json(alignedPlan);
+  let plan;
+  try {
+    plan = JSON.parse(cleaned);
+  } catch (_) {
+    return { error: "invalid-plan-json", details: cleaned };
+  }
 
-      } catch (err) {
-        diagnostics.push({ model: currentModel, issue: err.message });
-        continue;
-      }
-    }
+  return { plan };
+}
 
-    // Return structured diagnostics if everything failed
-    return res.status(502).json({
-      error: "AI Generation pipeline was unable to complete successfully.",
-      diagnostics: diagnostics
-    });
+// Main model loop with per-model 429 retry
+for (let i = 0; i < FALLBACK_MODELS.length; i++) {
+  const { id: modelId, timeout: timeoutMs } = FALLBACK_MODELS[i];
+
+  // First attempt
+  let result = await tryModel(modelId, timeoutMs);
+
+  // If 429, wait and retry once
+  if (result.error === "non-ok" && result.statusCode === 429) {
+    const waitSeconds = Math.min(result.retryAfter ?? 7, 10); // cap at 10s
+    const waitMs = Math.ceil(waitSeconds * 1000);
+    console.log(`Model ${modelId} rate-limited. Waiting ${waitSeconds}s then retrying...`);
+    await wait(waitMs);
+    result = await tryModel(modelId, timeoutMs); // second attempt
+  }
+
+  // If we got a valid plan, apply snapping and return
+  if (result.plan) {
+    const alignedPlan = alignAndSnapGeometry(result.plan, finalDims);
+    console.log(`Success with model: ${modelId}`);
+    return res.status(200).json(alignedPlan);
+  }
+
+  // Otherwise log the failure and try next model
+  diagnostics.push({
+    model: modelId,
+    ...(result.statusCode ? { statusCode: result.statusCode } : {}),
+    issue: result.error,
+    details: result.details ?? null
+  });
+
+  console.log(`Model ${modelId} failed (${result.error}), trying next...`);
+}
+
+// All models failed
+return res.status(502).json({
+  error: "AI Generation pipeline was unable to complete successfully.",
+  diagnostics: diagnostics
+});
 
   } catch (error) {
     return res.status(500).json({ error: error.message });
