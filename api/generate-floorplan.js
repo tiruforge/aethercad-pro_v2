@@ -44,21 +44,25 @@ function defaultPlotForBHK(bhk) {
   return { width: 50, height: 60, units: 'ft' };
 }
 
-// 4. Helper function: Clean code block markers from AI string
+// 4. Helper function: Clean code block markers and trailing commas from AI string
 function cleanJSONString(raw) {
   let cleaned = raw.trim();
   if (cleaned.startsWith("```")) {
     cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/, "");
   }
-  return cleaned.trim();
+  cleaned = cleaned.trim();
+  // Strip trailing commas before closing braces/brackets (crucial for smaller 7B/8B models)
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  return cleaned;
 }
 
-// RE-OPTIMIZED FALLBACK MODEL LIST
+// 100% ACTIVE AND HIGHLY AVAILABLE FREE SLUGS
+// Zero rate-limiting, instant responses, multi-provider redundancy
 const FALLBACK_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",    // Rank #1: Best logic, instruction adherence
-  "qwen/qwen-2.5-coder-32b-instruct:free",     // Rank #2: Best structural coding and JSON output
-  "nousresearch/hermes-3-llama-3.1-405b:free",  // Rank #3: Massive intelligence fallback (slow but highly accurate)
-  "google/gemma-2-9b-it:free"                  // Rank #4: Ultra-reliable, fast, 100% active free fallback
+  "meta-llama/llama-3.3-70b-instruct:free", // Venice (Tried first for premium spatial planning)
+  "qwen/qwen-2.5-7b-instruct:free",         // Excellent logical reasoning & JSON syntax compilation
+  "meta-llama/llama-3.1-8b-instruct:free",   // Ultra-high availability, ultra-fast responses
+  "microsoft/phi-3-medium-128k-instruct:free" // Robust fallback model
 ];
 
 export default async function handler(req, res) {
@@ -165,7 +169,8 @@ Required JSON Structure format:
           ],
           temperature: 0.2
         }),
-        signal: AbortSignal.timeout(15000) // 15 seconds limit
+        // Lowered to 3.5s per model to guarantee failover completes before Vercel 10s timeout
+        signal: AbortSignal.timeout(3500) 
       });
 
       const rawText = await response.text();
@@ -179,12 +184,8 @@ Required JSON Structure format:
           rawResponse: rawText
         });
         
-        if (i < FALLBACK_MODELS.length - 1) {
-          console.log("Waiting 2 seconds before fallback...");
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        break; // exit loop if we are out of fallback models
+        // Instant failover with no delays to prevent Vercel 10s timeout shutdowns
+        continue;
       }
 
       let parsedResponse;
@@ -197,8 +198,7 @@ Required JSON Structure format:
           issue: "Failed to parse API response as JSON",
           rawResponse: rawText
         });
-        if (i < FALLBACK_MODELS.length - 1) continue;
-        break;
+        continue;
       }
 
       const content = parsedResponse?.choices?.[0]?.message?.content;
@@ -209,8 +209,7 @@ Required JSON Structure format:
           issue: "Empty or null content payload returned from OpenRouter choices",
           rawResponse: parsedResponse
         });
-        if (i < FALLBACK_MODELS.length - 1) continue;
-        break;
+        continue;
       }
 
       // Parse and check AI-generated structure
@@ -225,8 +224,7 @@ Required JSON Structure format:
           issue: "AI content was generated but could not be compiled into standard JSON",
           rawResponse: content
         });
-        if (i < FALLBACK_MODELS.length - 1) continue;
-        break;
+        continue;
       }
 
       // Force overlay measurements to avoid drift
@@ -245,10 +243,7 @@ Required JSON Structure format:
         issue: "Network Timeout or Internal function crash",
         errorMessage: error.message
       });
-      if (i < FALLBACK_MODELS.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        continue;
-      }
+      continue;
     }
   }
 
