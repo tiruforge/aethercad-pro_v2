@@ -1,7 +1,7 @@
 // api/generate-floorplan.js
 
 export const config = {
-  runtime: 'edge', // Bypasses the 10-second limit, granting up to 30 seconds of processing!
+  runtime: 'edge', // Bypasses the 10-second limit, allowing up to 30 seconds of processing!
 };
 
 // 1. Helper function: Extract plot size using your exact working regex
@@ -99,14 +99,14 @@ function snapGeometryToCleanGrid(plan, finalDims) {
   return plan;
 }
 
-// COGNITIVE MODEL REGISTRY (24-second execution window)
+// ULTRA-STABLE NON-CONGESTED MODEL REGISTRY (No hardware outages, no heavy rate-limits!)
 const FALLBACK_MODELS = [
-  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 24000 }, // Primary: Generous 24-second window
-  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 4000 }   // Secondary: Fast 4-second Venice fallback
+  { id: "meta-llama/llama-3-70b-instruct:free", timeout: 15000 },  // Rank #1: Meta's highly available 70B (Fast, rarely rate-limited!)
+  { id: "google/gemma-2-27b-it:free", timeout: 8000 },             // Rank #2: Google's spatial reasoning champion (Fully active)
+  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 5000 }  // Rank #3: Venice logical backup
 ];
 
 export default async function handler(req) {
-  // CORS Configuration
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
@@ -210,10 +210,11 @@ Output ONLY the JSON in the schema.
 
     const diagnostics = [];
 
+    // Process our highly-available fallbacks
     for (let i = 0; i < FALLBACK_MODELS.length; i++) {
       const currentModel = FALLBACK_MODELS[i].id;
       const currentTimeout = FALLBACK_MODELS[i].timeout;
-      console.log(`Edge runtime routing to: ${currentModel} (Timeout limit: ${currentTimeout}ms)`);
+      console.log(`Routing on Edge: ${currentModel} (Timeout limit: ${currentTimeout}ms)`);
 
       try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -253,7 +254,7 @@ Output ONLY the JSON in the schema.
         const cleaned = content.replace(/```json|```/g, "").trim();
         let plan = JSON.parse(cleaned);
 
-        // Run geometry coordinate snap grid alignment
+        // Run coordinate snap grid alignment
         const alignedPlan = snapGeometryToCleanGrid(plan, finalDims);
 
         console.log(`Success! Floorplan generated on Edge with model: ${currentModel}`);
