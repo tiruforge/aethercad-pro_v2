@@ -44,25 +44,32 @@ function defaultPlotForBHK(bhk) {
   return { width: 50, height: 60, units: 'ft' };
 }
 
-// 4. Helper function: Clean code block markers and trailing commas from AI string
+// 4. Helper function: Clean and prepare AI output for JSON parsing
 function cleanJSONString(raw) {
   let cleaned = raw.trim();
+
+  // A. Strip DeepSeek reasoning blocks (<thought>...</thought>)
+  cleaned = cleaned.replace(/<thought>[\s\S]*?<\/thought>/gi, '');
+  cleaned = cleaned.trim();
+
+  // B. Strip markdown JSON code block fences
   if (cleaned.startsWith("```")) {
     cleaned = cleaned.replace(/^```(?:json)?/i, "").replace(/```$/, "");
   }
   cleaned = cleaned.trim();
-  // Strip trailing commas before closing braces/brackets (crucial for smaller 7B/8B models)
+
+  // C. Strip trailing commas before closing braces/brackets (essential for smaller models)
   cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
   return cleaned;
 }
 
-// 100% ACTIVE AND HIGHLY AVAILABLE FREE SLUGS
-// Zero rate-limiting, instant responses, multi-provider redundancy
+// HIGH-CAPACITY RESILIENT MODEL SLUGS (Venice + non-Venice providers)
 const FALLBACK_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free", // Venice (Tried first for premium spatial planning)
-  "qwen/qwen-2.5-7b-instruct:free",         // Excellent logical reasoning & JSON syntax compilation
-  "meta-llama/llama-3.1-8b-instruct:free",   // Ultra-high availability, ultra-fast responses
-  "microsoft/phi-3-medium-128k-instruct:free" // Robust fallback model
+  "deepseek/deepseek-r1:free",              // Rank #1: Extremely smart reasoning, hosted on high-capacity endpoints
+  "meta-llama/llama-3.3-70b-instruct:free", // Rank #2: Back-up spatial planning (Venice)
+  "mistralai/mistral-7b-instruct:free",     // Rank #3: Ultra-stable fallback, hosted by Together/DeepInfra (No Venice limits!)
+  "meta-llama/llama-3-8b-instruct:free",    // Rank #4: High-availability backup, hosted by Together/DeepInfra
+  "openchat/openchat-7b:free"               // Rank #5: Emergency fallback
 ];
 
 export default async function handler(req, res) {
@@ -169,8 +176,8 @@ Required JSON Structure format:
           ],
           temperature: 0.2
         }),
-        // Lowered to 3.5s per model to guarantee failover completes before Vercel 10s timeout
-        signal: AbortSignal.timeout(3500) 
+        // Crucial fast timeout limit (2.2 seconds per attempt) to stay under Vercel's 10s ceiling
+        signal: AbortSignal.timeout(2200) 
       });
 
       const rawText = await response.text();
@@ -184,7 +191,7 @@ Required JSON Structure format:
           rawResponse: rawText
         });
         
-        // Instant failover with no delays to prevent Vercel 10s timeout shutdowns
+        // Instant failover with zero sleep delays to secure 10-second serverless window
         continue;
       }
 
@@ -212,7 +219,7 @@ Required JSON Structure format:
         continue;
       }
 
-      // Parse and check AI-generated structure
+      // Safe clean and parsing
       const cleanJson = cleanJSONString(content);
       let planJson;
       try {
@@ -221,13 +228,13 @@ Required JSON Structure format:
         diagnostics.push({
           model: currentModel,
           statusCode: response.status,
-          issue: "AI content was generated but could not be compiled into standard JSON",
+          issue: "AI content was generated but could not be parsed into final JSON",
           rawResponse: content
         });
         continue;
       }
 
-      // Force overlay measurements to avoid drift
+      // Enforce bounds to prevent math drift
       if (!planJson.meta) planJson.meta = {};
       planJson.meta.units = finalDims.units;
       planJson.meta.outerWidth = finalDims.width;
