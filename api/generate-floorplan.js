@@ -1,5 +1,9 @@
 // api/generate-floorplan.js
 
+export const config = {
+  runtime: 'edge', // Bypasses the 10-second limit, granting up to 30 seconds of processing!
+};
+
 // 1. Helper function: Extract plot size using your exact working regex
 function extractPlotSize(prompt) {
   const m = prompt.match(/(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meter|meters|cm|')?/i);
@@ -22,39 +26,31 @@ function extractPlotSize(prompt) {
 function extractRequirements(prompt) {
   const p = String(prompt || "").toLowerCase();
 
-  // BHK (e.g., "3bhk", "3 bhk")
   const bhkMatch = p.match(/(\d+)\s*bhk/);
   const bhk = bhkMatch ? Number(bhkMatch[1]) : null;
 
-  // Bathrooms (e.g., "2 bathrooms", "2 bath", "3 toilets")
   const bathMatch = p.match(/(\d+)\s*(bath|bathroom|toilet|washroom)s?/);
   const bathrooms = bathMatch ? Number(bathMatch[1]) : null;
 
-  // Parking request
   const wantsParking = /(parking|car\s*park|carpark)/.test(p);
-
-  // Balcony / utility / garden (gap)
   const wantsBalcony = /(balcony|utility|garden|courtyard|sitout)/.test(p);
 
   return { bhk, bathrooms, wantsParking, wantsBalcony };
 }
 
-// 3. Helper function: Default plot sizes
+// 3. Helper function: Default plot configurations
 function defaultPlotForBHK(bhk) {
   if (bhk === 1) return { units: "ft", outerWidth: 20, outerHeight: 30 };
   if (bhk === 2) return { units: "ft", outerWidth: 30, outerHeight: 40 };
   if (bhk === 3) return { units: "ft", outerWidth: 40, outerHeight: 40 };
   if (bhk >= 4) return { units: "ft", outerWidth: 50, outerHeight: 60 };
-  return { units: "ft", outerWidth: 30, outerHeight: 40 }; // fallback
+  return { units: "ft", outerWidth: 30, outerHeight: 40 };
 }
 
-// =========================================================================
-// GOLD-MEDALIST GEOMETRY SNAPPER (Perfect Contiguous Alignments)
-// =========================================================================
+// 4. Non-Destructive Geometry Snapper to align rooms & walls perfectly on integer bounds
 function snapGeometryToCleanGrid(plan, finalDims) {
   if (!plan) return plan;
 
-  // Enforce outer plot constraints to prevent math drifting
   plan.meta = plan.meta || {};
   plan.meta.units = finalDims.units;
   plan.meta.outerWidth = finalDims.outerWidth;
@@ -63,10 +59,8 @@ function snapGeometryToCleanGrid(plan, finalDims) {
   const ow = finalDims.outerWidth;
   const oh = finalDims.outerHeight;
 
-  // Helper: Rounds coordinate to nearest whole integer
   const snap = (v) => (v !== undefined && v !== null ? Math.round(Number(v)) : 0);
 
-  // A. Snap wall segments perfectly to the grid bounds
   if (Array.isArray(plan.walls)) {
     plan.walls.forEach(wall => {
       wall.x1 = Math.min(ow, Math.max(0, snap(wall.x1)));
@@ -79,7 +73,6 @@ function snapGeometryToCleanGrid(plan, finalDims) {
     });
   }
 
-  // B. Snap room coordinates to align perfectly with rounded wall edges
   if (Array.isArray(plan.rooms)) {
     plan.rooms.forEach(room => {
       room.x = Math.min(ow, Math.max(0, snap(room.x)));
@@ -89,7 +82,6 @@ function snapGeometryToCleanGrid(plan, finalDims) {
     });
   }
 
-  // C. Round doors/windows while completely preserving front-end index mapping
   if (Array.isArray(plan.doors)) {
     plan.doors.forEach(door => {
       door.position = snap(door.position);
@@ -107,33 +99,49 @@ function snapGeometryToCleanGrid(plan, finalDims) {
   return plan;
 }
 
-export default async function handler(req, res) {
-  // CORS Setup
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+// COGNITIVE MODEL REGISTRY (24-second execution window)
+const FALLBACK_MODELS = [
+  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", timeout: 24000 }, // Primary: Generous 24-second window
+  { id: "meta-llama/llama-3.3-70b-instruct:free", timeout: 4000 }   // Secondary: Fast 4-second Venice fallback
+];
+
+export default async function handler(req) {
+  // CORS Configuration
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
+    'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Content-Type': 'application/json'
+  };
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed. Use POST.' }), { status: 405, headers: corsHeaders });
   }
 
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method Not Allowed" });
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON request body.' }), { status: 400, headers: corsHeaders });
     }
 
-    const { prompt } = req.body || {};
+    const { prompt } = body || {};
     if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
+      return new Response(JSON.stringify({ error: 'Missing prompt' }), { status: 400, headers: corsHeaders });
     }
-    
+
     const dims = extractPlotSize(prompt);
     const reqs = extractRequirements(prompt);
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "API key missing in environment configurations" });
+      return new Response(JSON.stringify({ error: 'API key configuration missing on server' }), { status: 500, headers: corsHeaders });
     }
 
     const systemPrompt = `
@@ -200,43 +208,70 @@ Plot size to use:
 Output ONLY the JSON in the schema.
 `.trim();
 
-    // 4. Fire the request directly to your proven model with NO artificial timeouts
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
-        "X-Title": "AetherCAD Pro v2"
-      },
-      body: JSON.stringify({
-        model: "nvidia/nemotron-3-ultra-550b-a55b:free", // Your proven stable model
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage }
-        ],
-      }),
-    });
+    const diagnostics = [];
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+    for (let i = 0; i < FALLBACK_MODELS.length; i++) {
+      const currentModel = FALLBACK_MODELS[i].id;
+      const currentTimeout = FALLBACK_MODELS[i].timeout;
+      console.log(`Edge runtime routing to: ${currentModel} (Timeout limit: ${currentTimeout}ms)`);
 
-    if (!content) {
-      return res.status(502).json({ error: "No content from AI", raw: data });
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://aethercad-pro-v2.vercel.app",
+            "X-Title": "AetherCAD Pro v2"
+          },
+          body: JSON.stringify({
+            model: currentModel,
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage }
+            ],
+          }),
+          signal: AbortSignal.timeout(currentTimeout)
+        });
+
+        const rawText = await response.text();
+
+        if (!response.ok) {
+          diagnostics.push({ model: currentModel, statusCode: response.status, details: rawText });
+          continue;
+        }
+
+        let parsedData = JSON.parse(rawText);
+        const content = parsedData?.choices?.[0]?.message?.content;
+        
+        if (!content) {
+          diagnostics.push({ model: currentModel, issue: "Empty content returned" });
+          continue;
+        }
+
+        const cleaned = content.replace(/```json|```/g, "").trim();
+        let plan = JSON.parse(cleaned);
+
+        // Run geometry coordinate snap grid alignment
+        const alignedPlan = snapGeometryToCleanGrid(plan, finalDims);
+
+        console.log(`Success! Floorplan generated on Edge with model: ${currentModel}`);
+        return new Response(JSON.stringify(alignedPlan), { status: 200, headers: corsHeaders });
+
+      } catch (err) {
+        console.warn(`Edge attempt with ${currentModel} encountered issue:`, err.message);
+        diagnostics.push({ model: currentModel, issue: err.message });
+        continue;
+      }
     }
 
-    // Clean up markdown block fences if present
-    const cleaned = content.replace(/```json|```/g, "").trim();
-    let plan = JSON.parse(cleaned);
-
-    // Apply Post-Processing Geometry Snapping
-    const alignedPlan = snapGeometryToCleanGrid(plan, finalDims);
-
-    console.log("Success! Compiled, cleaned, and snapped blueprint generated.");
-    return res.status(200).json(alignedPlan);
+    return new Response(JSON.stringify({
+      error: "The AI servers are currently congested. Please wait a few seconds and try again.",
+      diagnostics: diagnostics
+    }), { status: 502, headers: corsHeaders });
 
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
   }
 }
