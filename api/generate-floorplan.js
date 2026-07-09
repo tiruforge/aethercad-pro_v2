@@ -150,13 +150,17 @@ Output ONLY the JSON in the schema.
           "X-Title": "AetherCAD Pro v2"
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-3.3-70b-instruct:free",
-          temperature: 0.2,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user }
-          ],
-        }),
+  model: "meta-llama/llama-3.3-70b-instruct:free",
+  temperature: 0.2,
+  messages: [
+    { role: "system", content: system },
+    { role: "user", content: user }
+  ],
+  providers: {
+    allow_fallbacks: true,
+    order: ["Fireworks", "Together", "Lepton", "Avian", "Novita"]
+  }
+}),
       });
 
       // Read response as text first so we never crash on non-JSON
