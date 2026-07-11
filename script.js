@@ -1288,21 +1288,29 @@ export class AreaZone extends Shape {
       return;
     }
 
-    // 1. DYNAMIC UNIT DETECTION & DOUBLE-DECIMAL PRECISION SCALE MATH (Image 2 style)
-    const appScale = window.AI_UNIT_SCALE || (drawingAppInstance ? drawingAppInstance.aiUnitScale : 20) || 20;
-    const appUnits = window.AI_UNITS || (drawingAppInstance ? drawingAppInstance.aiUnits : 'ft') || 'ft';
+    // 1. DYNAMIC NATIVE UNIT DETECTION (Image 2 style)
+    let areaStr = "";
+    let widthStr = "";
+    let heightStr = "";
 
-    const realW = w / appScale;
-    const realH = h / appScale;
-    const realArea = realW * realH;
-
-    const unitLabel = appUnits; 
-    const areaLabel = appUnits === 'ft' ? 'ft²' : (appUnits === 'm' ? 'm²' : 'cm²'); // Superscript ² like Image 2!
-
-    // Format with perfect double-decimal precision (.00) matching Image 2
-    const widthStr = `W: ${realW.toFixed(2)} ${unitLabel}`;
-    const heightStr = `H: ${realH.toFixed(2)} ${unitLabel}`;
-    const areaStr = `${realArea.toFixed(2)} ${areaLabel}`;
+    if (drawingAppInstance) {
+      // Connects directly to the CAD app's active unit buttons in real-time!
+      areaStr = drawingAppInstance.formatArea(w * h);
+      widthStr = `W: ${drawingAppInstance.formatValue(w)}`;
+      heightStr = `H: ${drawingAppInstance.formatValue(h)}`;
+    } else {
+      // Fallback if rendered outside the main app instance
+      const appScale = window.AI_UNIT_SCALE || 20;
+      const appUnits = window.AI_UNITS || 'ft';
+      const realW = w / appScale;
+      const realH = h / appScale;
+      const realArea = realW * realH;
+      const areaLabel = appUnits === 'ft' ? 'ft²' : (appUnits === 'm' ? 'm²' : 'cm²');
+      
+      areaStr = `${realArea.toFixed(2)} ${areaLabel}`;
+      widthStr = `W: ${realW.toFixed(2)} ${appUnits}`;
+      heightStr = `H: ${realH.toFixed(2)} ${appUnits}`;
+    }
 
     // 2. THEME-BASED ROOM STYLING (Rich Cognitive Palette matching Image 2)
     let fillStyle = 'rgba(168, 85, 247, 0.06)';  // default faint purple
