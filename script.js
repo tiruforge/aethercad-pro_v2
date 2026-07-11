@@ -358,7 +358,7 @@ export class Wall extends Shape {
     this.y1 = y1;
     this.x2 = x2;
     this.y2 = y2;
-    this.wallThickness = wallThickness;
+    this.wallThickness = parseFloat(wallThickness) || 12;
   }
 
   contains(x, y, tolerance = 6) {
@@ -367,14 +367,14 @@ export class Wall extends Shape {
     const x2 = this.x2;
     const y2 = this.y2;
     const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
-    if (l2 === 0) {
-      return Math.hypot(x - x1, y - y1) < (this.wallThickness / 2 + tolerance);
-    }
+    const currentThickness = this.wallThickness || 12;
+    if (l2 === 0) return Math.hypot(x - x1, y - y1) < (currentThickness / 2 + tolerance);
+    
     let t = ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / l2;
     t = Math.max(0, Math.min(1, t));
     const projX = x1 + t * (x2 - x1);
     const projY = y1 + t * (y2 - y1);
-    return Math.hypot(x - projX, y - projY) < (this.wallThickness / 2 + tolerance);
+    return Math.hypot(x - projX, y - projY) < (currentThickness / 2 + tolerance);
   }
 
   move(dx, dy) {
@@ -404,10 +404,10 @@ export class Wall extends Shape {
       return;
     }
 
-    // Perpendicular unit vector
+    const currentThickness = this.wallThickness || 12;
     const nx = -dy / len;
     const ny = dx / len;
-    const halfW = this.wallThickness / 2;
+    const halfW = currentThickness / 2;
 
     const p1x = this.x1 + nx * halfW;
     const p1y = this.y1 + ny * halfW;
@@ -418,67 +418,74 @@ export class Wall extends Shape {
     const p4x = this.x1 - nx * halfW;
     const p4y = this.y1 - ny * halfW;
 
-    // 1. Draw solid translucent wall backing in solid cyan/blue tint
+    // 1. Draw solid wall parallel layout lines
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.4)'; // Faint industrial blueprint wall fill
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
     ctx.lineTo(p3x, p3y);
     ctx.lineTo(p4x, p4y);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.16)'; // cyan/blue walls backing
     ctx.fill();
 
-    // 2. Draw diagonal hatching lines inside the wall zone using cyan/blue
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
-    ctx.lineWidth = 1;
-    const hatchSpacing = 12;
-    for (let d = 0; d < len; d += hatchSpacing) {
-      const ratio = d / len;
-      const cx = this.x1 + dx * ratio;
-      const cy = this.y1 + dy * ratio;
-      ctx.beginPath();
-      ctx.moveTo(cx + nx * halfW - ny * 3, cy + ny * halfW + nx * 3);
-      ctx.lineTo(cx - nx * halfW + ny * 3, cy - ny * halfW - nx * 3);
-      ctx.stroke();
-    }
-
-    // 3. Draw outer parallel boundary lines
+    ctx.strokeStyle = this.color || '#334155';
+    ctx.lineWidth = this.lineWidth || 1.5;
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
-    ctx.moveTo(p4x, p4y);
-    ctx.lineTo(p3x, p3y);
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = this.lineWidth;
+    ctx.moveTo(p3x, p3y);
+    ctx.lineTo(p4x, p4y);
     ctx.stroke();
 
-    // 4. Draw clear wall label if the wall is long enough for a badge
-    if (len > 75) {
+    // 2. Draw wall center-axis alignment line
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(this.x1, this.y1);
+    ctx.lineTo(this.x2, this.y2);
+    ctx.stroke();
+
+    // 3. Draw Dynamic scale-switchable "WALL: XX" badges
+    if (len > 35) {
       ctx.save();
       const midX = (this.x1 + this.x2) / 2;
       const midY = (this.y1 + this.y2) / 2;
       let angle = Math.atan2(dy, dx);
-      // Keep text upright
+      // Keep text upright for legibility
       if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
         angle += Math.PI;
       }
       ctx.translate(midX, midY);
       ctx.rotate(angle);
 
-      const labelText = `WALL: ${Math.round(this.wallThickness)} cm`;
-      ctx.font = 'bold 8px monospace';
-      const textWidth = ctx.measureText(labelText).width;
+      // --- DYNAMIC WALL SCALE FORMATTER ---
+      const activeUnit = (drawingAppInstance ? drawingAppInstance.activeUnit : null) || window.AI_UNITS || 'ft';
+      const scale = (drawingAppInstance ? drawingAppInstance.aiUnitScale : null) || window.AI_UNIT_SCALE || 20;
       
-      // Glass/solid badge behind the text for perfect readability
+      let convertedThickness = currentThickness / scale;
+      if (activeUnit === 'm') convertedThickness = (currentThickness / scale) * 0.3048;
+      else if (activeUnit === 'cm') convertedThickness = (currentThickness / scale) * 30.48;
+      else if (activeUnit === 'mm') convertedThickness = (currentThickness / scale) * 304.8;
+      else if (activeUnit === 'in') convertedThickness = (currentThickness / scale) * 12;
+      else if (activeUnit === 'px') convertedThickness = currentThickness;
+
+      const labelText = `WALL: ${convertedThickness.toFixed(2)} ${activeUnit}`;
+      ctx.font = 'bold 7px monospace';
+      const txtW = ctx.measureText(labelText).width;
+
+      // Dark background badge behind the text for perfect readability
       ctx.fillStyle = 'rgba(15, 17, 21, 0.85)';
       ctx.beginPath();
-      ctx.roundRect(-textWidth / 2 - 4, -6, textWidth + 8, 12, 2);
+      ctx.roundRect(-txtW / 2 - 3, -5, txtW + 6, 10, 2);
       ctx.fill();
-      ctx.strokeStyle = this.color || '#38BDF8';
+      
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
       ctx.lineWidth = 0.5;
+      ctx.setLineDash([]);
       ctx.stroke();
 
-      ctx.fillStyle = '#38BDF8'; // beautiful cyan
+      ctx.fillStyle = '#38BDF8'; // Crisp sky-blue wall labels
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(labelText, 0, 0);
@@ -818,7 +825,17 @@ export class Door extends Shape {
       ctx.translate(midX, midY);
       ctx.rotate(angle);
 
-      const labelText = drawingAppInstance ? `DR: ${drawingAppInstance.formatValue(r)}` : `DR: ${Math.round(r)} cm`;
+      // --- DYNAMIC UNIT SCALE FORMATTER ---
+      const activeUnit = (drawingAppInstance ? drawingAppInstance.activeUnit : null) || window.AI_UNITS || 'ft';
+      const scale = (drawingAppInstance ? drawingAppInstance.aiUnitScale : null) || window.AI_UNIT_SCALE || 20;
+      let convertedValue = r / scale;
+      if (activeUnit === 'm') convertedValue = (r / scale) * 0.3048;
+      else if (activeUnit === 'cm') convertedValue = (r / scale) * 30.48;
+      else if (activeUnit === 'mm') convertedValue = (r / scale) * 304.8;
+      else if (activeUnit === 'in') convertedValue = (r / scale) * 12;
+      else if (activeUnit === 'px') convertedValue = r;
+
+      const labelText = `DR: ${convertedValue.toFixed(2)} ${activeUnit}`;
       ctx.font = 'bold 7.5px monospace';
       const txtW = ctx.measureText(labelText).width;
 
@@ -851,7 +868,6 @@ export class Door extends Shape {
     };
   }
 }
-
 export class Window extends Shape {
   constructor(x1, y1, x2, y2, color, lineWidth, windowThickness = 8) {
     super('window', color, lineWidth);
@@ -988,7 +1004,17 @@ export class Window extends Shape {
       ctx.translate(midX, midY);
       ctx.rotate(angle);
 
-      const labelText = drawingAppInstance ? `WD: ${drawingAppInstance.formatValue(len)}` : `WD: ${Math.round(len)} cm`;
+      // --- DYNAMIC UNIT SCALE FORMATTER ---
+      const activeUnit = (drawingAppInstance ? drawingAppInstance.activeUnit : null) || window.AI_UNITS || 'ft';
+      const scale = (drawingAppInstance ? drawingAppInstance.aiUnitScale : null) || window.AI_UNIT_SCALE || 20;
+      let convertedValue = len / scale;
+      if (activeUnit === 'm') convertedValue = (len / scale) * 0.3048;
+      else if (activeUnit === 'cm') convertedValue = (len / scale) * 30.48;
+      else if (activeUnit === 'mm') convertedValue = (len / scale) * 304.8;
+      else if (activeUnit === 'in') convertedValue = (len / scale) * 12;
+      else if (activeUnit === 'px') convertedValue = len;
+
+      const labelText = `WD: ${convertedValue.toFixed(2)} ${activeUnit}`;
       ctx.font = 'bold 7.5px monospace';
       const txtW = ctx.measureText(labelText).width;
 
@@ -1022,160 +1048,6 @@ export class Window extends Shape {
     };
   }
 }
-
-export class RoomLabel extends Shape {
-  constructor(x, y, width, height, color, lineWidth, labelText = "Living Room") {
-    super('roomlabel', color, lineWidth);
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-    this.labelText = String(labelText || "Living Room");
-  }
-
-  contains(x, y, tolerance = 6) {
-    let cx = x;
-    let cy = y;
-    if (this.angle) {
-      const centX = this.x + this.width / 2;
-      const centY = this.y + this.height / 2;
-      const dx = x - centX;
-      const dy = y - centY;
-      const rx = dx * Math.cos(-this.angle) - dy * Math.sin(-this.angle);
-      const ry = dx * Math.sin(-this.angle) + dy * Math.cos(-this.angle);
-      cx = centX + rx;
-      cy = centY + ry;
-    }
-    const xMin = Math.min(this.x, this.x + this.width);
-    const xMax = Math.max(this.x, this.x + this.width);
-    const yMin = Math.min(this.y, this.y + this.height);
-    const yMax = Math.max(this.y, this.y + this.height);
-    return cx >= xMin - tolerance && cx <= xMax + tolerance && cy >= yMin - tolerance && cy <= yMax + tolerance;
-  }
-
-  move(dx, dy) {
-    this.x += dx;
-    this.y += dy;
-  }
-
-  rotate(px, py, angleRad) {
-    const cx = this.x + this.width / 2;
-    const cy = this.y + this.height / 2;
-    const n = rotatePoint(cx, cy, px, py, angleRad);
-    this.x = n.x - this.width / 2;
-    this.y = n.y - this.height / 2;
-    this.angle = (this.angle || 0) + angleRad;
-  }
-
-  draw(ctx, drawingAppInstance = null) {
-    ctx.save();
-    if (this.angle) {
-      const cx = this.x + this.width / 2;
-      const cy = this.y + this.height / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate(this.angle);
-      ctx.translate(-cx, -cy);
-    }
-    const xMin = Math.min(this.x, this.x + this.width);
-    const yMin = Math.min(this.y, this.y + this.height);
-    const w = Math.abs(this.width);
-    const h = Math.abs(this.height);
-
-    if (w === 0 || h === 0) {
-      ctx.restore();
-      return;
-    }
-
-    // 1. Draw styled room envelope
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = this.lineWidth || 1.5;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.rect(xMin, yMin, w, h);
-    ctx.stroke();
-
-    // 2. Zone fill overlay background
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.05)'; // purple shade
-    ctx.fillRect(xMin, yMin, w, h);
-
-    // 3. Render nice glass tag centered
-    const midX = xMin + w / 2;
-    const midY = yMin + h / 2;
-
-    const showRoomDim = drawingAppInstance ? drawingAppInstance.showRoomDimensions : true;
-
-    const boxW = Math.min(w - 6, Math.max(130, w * 0.75));
-    const boxH = Math.min(h - 6, Math.max(showRoomDim ? 80 : 55, h * 0.55));
-
-    if (w > 40 && h > 30) {
-      ctx.fillStyle = 'rgba(15, 17, 21, 0.85)';
-      ctx.strokeStyle = 'rgba(168, 85, 247, 0.55)'; // purple rim
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.rect(midX - boxW / 2, midY - boxH / 2, boxW, boxH);
-      ctx.fill();
-      ctx.stroke();
-
-      if (showRoomDim) {
-        let areaStr = "";
-        let widthStr = "";
-        let heightStr = "";
-
-        if (drawingAppInstance) {
-          const areaPx = w * h;
-          areaStr = `Area: ${drawingAppInstance.formatArea(areaPx)}`;
-          widthStr = `Width: ${drawingAppInstance.formatValue(w)}`;
-          heightStr = `Height: ${drawingAppInstance.formatValue(h)}`;
-        } else {
-          areaStr = `Area: ${(w * h).toFixed(1)} px²`;
-          widthStr = `Width: ${w.toFixed(1)} px`;
-          heightStr = `Height: ${h.toFixed(1)} px`;
-        }
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 9.5px "Space Grotesk", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.labelText.toUpperCase(), midX, midY - boxH * 0.28);
-
-        ctx.fillStyle = '#C084FC'; // light violet area
-        ctx.font = '9px monospace';
-        ctx.fillText(areaStr, midX, midY - boxH * 0.03);
-
-        ctx.fillStyle = '#9CA3AF'; // text grey for Width
-        ctx.font = '9px monospace';
-        ctx.fillText(widthStr, midX, midY + boxH * 0.18);
-
-        ctx.fillStyle = '#9CA3AF'; // text grey for Height
-        ctx.font = '9px monospace';
-        ctx.fillText(heightStr, midX, midY + boxH * 0.36);
-
-      } else {
-        // Fallback to only displaying the label text without sub-metrics
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 10px "Space Grotesk", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.labelText.toUpperCase(), midX, midY);
-      }
-    }
-
-    ctx.restore();
-  }
-
-  serialize() {
-    return {
-      ...super.serialize(),
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-      labelText: this.labelText
-    };
-  }
-}
-
 export class Dimension extends Shape {
   constructor(x1, y1, x2, y2, color, lineWidth, dimType = 'aligned', arrowSize = 8, offset = 25) {
     super('dimension', color, lineWidth);
@@ -1220,24 +1092,58 @@ export class Dimension extends Shape {
   }
 
   draw(ctx, drawingAppInstance = null) {
-    if (!drawingAppInstance) return;
     const len = Math.hypot(this.x2 - this.x1, this.y2 - this.y1);
     if (len === 0) return;
     
-    // Formatting value centered
-    const labelText = drawingAppInstance.formatValue(len);
-    drawingAppInstance.drawProfessionalDimension(
-      ctx,
-      this.x1,
-      this.y1,
-      this.x2,
-      this.y2,
-      labelText,
-      this.offset,
-      this.dimType,
-      this.arrowSize,
-      this.color
-    );
+    // --- DYNAMIC UNIT SCALE FORMATTER ---
+    const activeUnit = (drawingAppInstance ? drawingAppInstance.activeUnit : null) || window.AI_UNITS || 'ft';
+    const scale = (drawingAppInstance ? drawingAppInstance.aiUnitScale : null) || window.AI_UNIT_SCALE || 20;
+    
+    let convertedValue = len / scale;
+    if (activeUnit === 'm') convertedValue = (len / scale) * 0.3048;
+    else if (activeUnit === 'cm') convertedValue = (len / scale) * 30.48;
+    else if (activeUnit === 'mm') convertedValue = (len / scale) * 304.8;
+    else if (activeUnit === 'in') convertedValue = (len / scale) * 12;
+    else if (activeUnit === 'px') convertedValue = len;
+
+    const labelText = `${convertedValue.toFixed(2)} ${activeUnit}`;
+
+    if (drawingAppInstance) {
+      // Draw professional CAD layout lines, ticks, and arrows
+      drawingAppInstance.drawProfessionalDimension(
+        ctx,
+        this.x1,
+        this.y1,
+        this.x2,
+        this.y2,
+        labelText,
+        this.offset,
+        this.dimType,
+        this.arrowSize,
+        this.color
+      );
+    } else {
+      // Standard clean fallback drawing if context isn't passed yet
+      ctx.save();
+      ctx.strokeStyle = this.color || '#94A3B8';
+      ctx.lineWidth = this.lineWidth || 1.5;
+      ctx.beginPath();
+      ctx.moveTo(this.x1, this.y1);
+      ctx.lineTo(this.x2, this.y2);
+      ctx.stroke();
+
+      const midX = (this.x1 + this.x2) / 2;
+      const midY = (this.y1 + this.y2) / 2;
+      ctx.fillStyle = 'rgba(15, 17, 21, 0.9)';
+      ctx.font = 'bold 9px monospace';
+      const tw = ctx.measureText(labelText).width;
+      ctx.fillRect(midX - tw / 2 - 4, midY - 6, tw + 8, 12);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labelText, midX, midY);
+      ctx.restore();
+    }
   }
 
   serialize() {
@@ -1253,7 +1159,6 @@ export class Dimension extends Shape {
     };
   }
 }
-
 export class TextLabel extends Shape {
   constructor(x, y, color, lineWidth, labelText = "Main Annotation Note", fontSize = 14) {
     super('text', color, lineWidth);
