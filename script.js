@@ -4039,7 +4039,29 @@ ${g.related.join(', ')}
     const aiSourceIndicator = document.getElementById('ai-source-indicator');
 
     if (aiGenerateBtn && aiPromptInput) {
-      aiGenerateBtn.addEventListener('click', async () => {
+      // Apply Coming Soon styles on page load
+      aiPromptInput.disabled = true;
+      aiPromptInput.placeholder = "AI Drafting is undergoing a cloud database upgrade...";
+      aiPromptInput.style.background = "#1e293b";
+      aiPromptInput.style.cursor = "not-allowed";
+      aiGenerateBtn.innerHTML = `Coming Soon 🚀`;
+      aiGenerateBtn.style.background = "#475569";
+      aiGenerateBtn.style.borderColor = "#475569";
+      aiGenerateBtn.style.cursor = "not-allowed";
+
+      aiGenerateBtn.addEventListener('click', async (e) => {
+        if (e) e.preventDefault();
+        alert(
+          "AetherCAD Pro - AI Upgrades & Cloud Migration\n\n" +
+          "Our AI Floorplan Generator is temporarily undergoing a massive architectural upgrade!\n\n" +
+          "What we are building for you:\n" +
+          "• Cloud Saves: Save generated CAD floorplans directly to your cloud account.\n" +
+          "• Supabase Profiles: Log in from any computer and resume your edits instantly.\n" +
+          "• Enhanced AI models: Faster drafting, accurate walls, and custom room palettes.\n\n" +
+          "This feature will resume in full force following our database migration phase. Thank you for your patience!"
+        );
+        return; // STOP EXECUTION HERE - Guaranteed no bracket errors!
+
         const prompt = aiPromptInput.value.trim();
         if (!prompt) {
           alert('Please enter a description for the floor plan first.');
