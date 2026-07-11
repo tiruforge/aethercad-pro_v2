@@ -1288,29 +1288,40 @@ export class AreaZone extends Shape {
       return;
     }
 
-    // 1. DYNAMIC NATIVE UNIT DETECTION (Image 2 style)
-    let areaStr = "";
-    let widthStr = "";
-    let heightStr = "";
+    // 1. DYNAMIC UNIT DETECTION & HIGH-PRECISION CONVERSION MATH (Self-Sufficient Fix)
+    const activeUnit = (drawingAppInstance ? drawingAppInstance.activeUnit : null) || window.AI_UNITS || 'ft';
+    const scale = (drawingAppInstance ? drawingAppInstance.aiUnitScale : null) || window.AI_UNIT_SCALE || 20;
 
-    if (drawingAppInstance) {
-      // Connects directly to the CAD app's active unit buttons in real-time!
-      areaStr = drawingAppInstance.formatArea(w * h);
-      widthStr = `W: ${drawingAppInstance.formatValue(w)}`;
-      heightStr = `H: ${drawingAppInstance.formatValue(h)}`;
-    } else {
-      // Fallback if rendered outside the main app instance
-      const appScale = window.AI_UNIT_SCALE || 20;
-      const appUnits = window.AI_UNITS || 'ft';
-      const realW = w / appScale;
-      const realH = h / appScale;
-      const realArea = realW * realH;
-      const areaLabel = appUnits === 'ft' ? 'ft²' : (appUnits === 'm' ? 'm²' : 'cm²');
-      
-      areaStr = `${realArea.toFixed(2)} ${areaLabel}`;
-      widthStr = `W: ${realW.toFixed(2)} ${appUnits}`;
-      heightStr = `H: ${realH.toFixed(2)} ${appUnits}`;
+    // Convert raw pixels to base feet (using active scale factor, e.g., 15 or 20)
+    let realW = w / scale;
+    let realH = h / scale;
+
+    // Apply dynamic unit switch conversions
+    if (activeUnit === 'm') {
+      realW = realW * 0.3048;
+      realH = realH * 0.3048;
+    } else if (activeUnit === 'cm') {
+      realW = realW * 30.48;
+      realH = realH * 30.48;
+    } else if (activeUnit === 'mm') {
+      realW = realW * 304.8;
+      realH = realH * 304.8;
+    } else if (activeUnit === 'in') {
+      realW = realW * 12;
+      realH = realH * 12;
+    } else if (activeUnit === 'px') {
+      realW = w;
+      realH = h;
     }
+
+    const realArea = realW * realH;
+
+    const unitLabel = activeUnit;
+    const areaLabel = activeUnit === 'ft' ? 'ft²' : (activeUnit === 'm' ? 'm²' : (activeUnit === 'cm' ? 'cm²' : (activeUnit === 'mm' ? 'mm²' : (activeUnit === 'in' ? 'in²' : 'px²'))));
+
+    const widthStr = `W: ${realW.toFixed(2)} ${unitLabel}`;
+    const heightStr = `H: ${realH.toFixed(2)} ${unitLabel}`;
+    const areaStr = `${realArea.toFixed(2)} ${areaLabel}`;
 
     // 2. THEME-BASED ROOM STYLING (Rich Cognitive Palette matching Image 2)
     let fillStyle = 'rgba(168, 85, 247, 0.06)';  // default faint purple
