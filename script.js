@@ -13280,8 +13280,90 @@ mappedShapes.push({
 // Instantiate and kick off application when DOM is ready
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', () => {
-    new CADApp();
+    // Assign the new CADApp to the global window.app scope
+    window.app = new CADApp();
   });
 } else {
-  new CADApp();
+  // Assign the new CADApp to the global window.app scope
+  window.app = new CADApp();
 }
+/**
+ * ==========================================
+ * AETHERCAD-SUPABASE CLOUD SYNC HOOKS
+ * ==========================================
+ * These hooks bridge your legacy canvas state to your new Supabase database.
+ */
+
+// 1. Hook to extract shapes from the canvas and return them to the cloud database
+window.exportCADProject = function() {
+  try {
+    // Attempt to locate your primary CAD application engine instance
+    let cadInstance = window.app || window.cadApp || window.cad || window.editor;
+    
+    let shapesArray = [];
+    let activeUnit = 'ft';
+    let outerWidth = 30;
+    let outerHeight = 40;
+
+    if (cadInstance) {
+      shapesArray = cadInstance.shapes || cadInstance.elements || [];
+      activeUnit = cadInstance.activeUnit || cadInstance.units || 'ft';
+      outerWidth = cadInstance.outerWidth || cadInstance.plotWidth || 30;
+      outerHeight = cadInstance.outerHeight || cadInstance.plotHeight || 40;
+    } else {
+      // Fallback: Read state directly from your localStorage keys if instances are scoped locally
+      const storedShapes = localStorage.getItem('canvas_shapes') || localStorage.getItem('cad_shapes');
+      if (storedShapes) {
+        shapesArray = JSON.parse(storedShapes);
+      }
+      activeUnit = window.AI_UNITS || localStorage.getItem('cad_units') || 'ft';
+    }
+
+    return {
+      shapes: shapesArray,
+      units: activeUnit,
+      outer_width: outerWidth,
+      outer_height: outerHeight
+    };
+  } catch (err) {
+    console.error("Supabase Cloud Sync: Failed to export canvas elements:", err);
+    return null;
+  }
+};
+
+// 2. Hook to write a saved drawing layout back onto your canvas
+window.importCADProject = function(projectData) {
+  try {
+    if (!projectData) return false;
+    const { shapes, units, outer_width, outer_height } = projectData;
+
+    let cadInstance = window.app || window.cadApp || window.cad || window.editor;
+
+    if (cadInstance) {
+      // Inject saved credentials directly back into the running engine variables
+      if ('shapes' in cadInstance) cadInstance.shapes = shapes || [];
+      if ('activeUnit' in cadInstance) cadInstance.activeUnit = units || 'ft';
+      if ('outerWidth' in cadInstance) cadInstance.outerWidth = outer_width || 30;
+      if ('outerHeight' in cadInstance) cadInstance.outerHeight = outer_height || 40;
+
+      // Force-trigger a canvas redrawing cycle
+      if (typeof cadInstance.redraw === 'function') cadInstance.redraw();
+      else if (typeof cadInstance.draw === 'function') cadInstance.draw();
+      else if (typeof redrawCanvas === 'function') redrawCanvas();
+
+      // Keep local storage synchronized
+      localStorage.setItem('canvas_shapes', JSON.stringify(shapes));
+      return true;
+    } else {
+      // Fallback: write to localStorage and force redraw
+      localStorage.setItem('canvas_shapes', JSON.stringify(shapes));
+      if (typeof redrawCanvas === 'function') {
+        redrawCanvas();
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error("Supabase Cloud Sync: Failed to import blueprint:", err);
+    return false;
+  }
+};

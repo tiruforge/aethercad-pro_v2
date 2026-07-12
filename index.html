@@ -10,8 +10,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+        <!-- Tailwind CSS Script CDN for premium signup design styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
   </head>
   <body class="h-screen w-screen bg-[#0F1115] text-[#E0E0E0] font-sans select-none overflow-hidden">
+    <!-- React Auth Gatekeeper Mount Point -->
+    <div id="root"></div>
     <!-- Main Fullscreen Layout -->
     <div id="app" class="h-full w-full flex flex-col justify-between">
       
@@ -1983,5 +1998,6 @@
 
     <!-- JavaScript modules entry point -->
     <script type="module" src="/script.js"></script>
+        <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
