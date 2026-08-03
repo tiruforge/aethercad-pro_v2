@@ -13367,3 +13367,72 @@ window.importCADProject = function(projectData) {
     return false;
   }
 };
+
+// --- CIVIL CAD MODE ENGINE INITIALIZER ---
+const civilCheckbox = document.getElementById('civil-toggle-checkbox');
+
+if (civilCheckbox) {
+  civilCheckbox.addEventListener('change', (event) => {
+    const isModeActive = event.target.checked;
+    
+    if (isModeActive) {
+      console.log("Civil CAD Mode successfully initialized.");
+      // [Add your custom code to enable structural snapping / civil tools here]
+    } else {
+      console.log("Civil CAD Mode deactivated.");
+      // [Add your custom code to disable structural snapping / civil tools here]
+    }
+  });
+}
+
+
+
+// --- AETHERCAD PRO DRAFTING GUIDES MODULE (SHIELDED POSITIONING) ---
+(function() {
+  function registerCADToggle(btnId, handleId, defaultState = true, activeBg = '#2563eb') {
+    const btn = document.getElementById(btnId);
+    const handle = document.getElementById(handleId);
+
+    if (!btn || !handle) return;
+
+    let isActive = defaultState;
+
+    const syncUI = () => {
+      if (isActive) {
+        btn.style.backgroundColor = activeBg;
+        handle.style.transform = 'translateX(14px)'; // Moves handle exactly 14px
+      } else {
+        btn.style.backgroundColor = '#2A2D35'; // Off State Gray
+        handle.style.transform = 'translateX(0px)';  // Returns to 0px
+      }
+    };
+
+    syncUI(); // Align visual states immediately on load
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      isActive = !isActive;
+      syncUI();
+
+      // Trigger custom event for your drawing system
+      btn.dispatchEvent(new CustomEvent('cadToggleChange', { detail: { active: isActive } }));
+    });
+  }
+
+  // Register controllers with exact default layouts matching your HTML
+  registerCADToggle('toggle-snap-btn', 'snap-handle', true, '#2563eb');
+  registerCADToggle('toggle-grid-btn', 'grid-handle', true, '#2563eb');
+  registerCADToggle('toggle-measurements-btn', 'measurements-handle', false, '#2563eb');
+  registerCADToggle('toggle-dimensions-btn', 'dimensions-handle', true, '#2563eb');
+  registerCADToggle('toggle-room-dimensions-btn', 'room-dimensions-handle', true, '#2563eb');
+  registerCADToggle('toggle-wall-dimensions-btn', 'wall-dimensions-handle', true, '#2563eb');
+
+  // Sync grid size slider text
+  const slider = document.getElementById('grid-size-slider');
+  const display = document.getElementById('grid-size-display');
+  if (slider && display) {
+    slider.addEventListener('input', (e) => {
+      display.textContent = `${e.target.value} px`;
+    });
+  }
+})();

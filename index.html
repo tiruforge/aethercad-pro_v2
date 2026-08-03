@@ -404,26 +404,97 @@
         <!-- SIDE PANEL CONTROLS (LEFT SECTION) -->
         <aside id="side-panel" class="w-64 shrink-0 border-r border-[#2A2D35] bg-[#181A1F] flex flex-col p-4 gap-5 select-none overflow-y-auto hidden md:flex transition-all duration-300">
           
-          <!-- CIVIL ENGINEERING MODE ACTIVE TOGGLE -->
+     <!-- CIVIL ENGINEERING MODE ACTIVE TOGGLE -->
           <div id="civil-mode-card" class="flex flex-col gap-2 p-3 rounded-lg border border-cyan-500/30 bg-[#12222d]/60 hover:border-cyan-500/60 transition duration-200">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="flex h-2 w-2 relative">
+            
+            <!-- 1. Native Checkbox Controller (Hidden from view) -->
+            <input type="checkbox" id="civil-toggle-checkbox" style="display: none;" checked>
+            
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="flex h-2 w-2 relative shrink-0">
                   <span id="civil-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                  <span id="civil-dot" class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                  <span id="civil-dot" class="relative inline-flex rounded-full h-2 w-2 transition-colors duration-200"></span>
                 </span>
-                <span class="text-[10px] font-bold text-cyan-400 tracking-wide uppercase font-mono">CIVIL CAD MODE</span>
+                <span class="text-[10px] font-bold text-cyan-400 tracking-wide uppercase font-mono truncate">CIVIL CAD MODE</span>
               </div>
-              <!-- Toggle switch button -->
-              <button id="btn-toggle-civil-mode" class="relative inline-flex items-center h-4 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-cyan-600" title="Toggle Civil Engineering CAD Suite">
-                <span id="civil-toggle-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-4"></span>
-              </button>
+              
+              <!-- 2. Pure CSS Toggle Switch UI -->
+              <label for="civil-toggle-checkbox" class="aether-switch">
+                <span class="aether-slider"></span>
+              </label>
             </div>
             <p class="text-[9.5px] text-slate-400 leading-normal font-sans">
               Calibrating Area/Perimeter tracking, structural snapping, and engineering blueprint tools.
             </p>
           </div>
 
+          <!-- 3. Self-Contained Scoped CSS Override -->
+          <style>
+            /* Explicitly size the switch container */
+            .aether-switch {
+              position: relative !important;
+              display: inline-block !important;
+              width: 36px !important;
+              height: 20px !important;
+              flex-shrink: 0 !important;
+              cursor: pointer !important;
+            }
+
+            /* Create the background track with exact dimensions */
+            .aether-slider {
+              position: absolute !important;
+              top: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              bottom: 0 !important;
+              background-color: #334155 !important; /* Off state: Grey */
+              transition: background-color 0.2s ease-in-out !important;
+              border-radius: 9999px !important;
+            }
+
+            /* Build the white circular handle inside the track boundaries */
+            .aether-slider::before {
+              position: absolute !important;
+              content: "" !important;
+              height: 16px !important;
+              width: 16px !important;
+              left: 2px !important;
+              bottom: 2px !important;
+              background-color: #ffffff !important;
+              border-radius: 50% !important;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+              transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+
+            /* --- NATIVE CSS BINDINGS --- */
+
+            /* 1. When checkbox is Checked: Turn track Cyan Blue */
+            #civil-toggle-checkbox:checked + div .aether-switch .aether-slider {
+              background-color: #0891b2 !important;
+            }
+
+            /* 2. When checkbox is Checked: Slide knob exactly 16px to the right */
+            #civil-toggle-checkbox:checked + div .aether-switch .aether-slider::before {
+              transform: translateX(16px) !important;
+            }
+
+            /* 3. Control dot color natively */
+            #civil-dot {
+              background-color: #64748b !important; /* Default Off: Grey */
+            }
+            #civil-toggle-checkbox:checked + div #civil-dot {
+              background-color: #06b6d4 !important; /* Active On: Cyan */
+            }
+
+            /* 4. Control ping visibility natively */
+            #civil-ping {
+              display: none !important; /* Default Off: Hidden */
+            }
+            #civil-toggle-checkbox:checked + div #civil-ping {
+              display: inline-flex !important; /* Active On: Visible */
+            }
+          </style>                             
           <!-- Drawing Properties section -->
           <div class="flex flex-col gap-2">
             <h3 class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Stroke Settings</h3>
@@ -793,119 +864,158 @@
             </div>
           </div>
 
-          <!-- Drafting Settings panel -->
+                                    <!-- Drafting Settings panel -->
           <div class="flex flex-col gap-2">
-            <h3 class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Drafting Guides</h3>
-            <div class="bg-[#0F1115] border border-[#2A2D35] p-3 rounded flex flex-col gap-3">
+            <h3 class="text-[10px] uppercase tracking-widest text-slate-500 font-bold font-mono">Drafting Guides</h3>
+            <div class="bg-[#0F1115] border border-[#2A2D35] p-3 rounded flex flex-col gap-3 w-full box-border">
               
-              <!-- Snapping to Grid Toggle -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-gray-200">Object Snapping</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Master snapping trigger</span>
+              <!-- Snapping to Grid Toggle (Starts ON) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-semibold text-gray-200 truncate">Object Snapping</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate">Master snapping trigger</span>
                 </div>
-                <button id="toggle-snap-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-blue-600">
-                  <span id="snap-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-snap-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2563eb;" 
+                          class="focus:outline-none"
+                          title="Toggle Snap Mode">
+                    <span id="snap-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(14px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
               <!-- Snapping Sub-options -->
-              <div id="snap-sub-options" class="flex flex-col gap-2 pl-2 border-l border-blue-500/30 mt-1">
-                <!-- Snap to Grid -->
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input id="snap-grid-cb" type="checkbox" checked class="w-3.5 h-3.5 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
-                  <div class="flex flex-col">
-                    <span class="text-[11.5px] text-gray-300 font-medium">Snap to Grid</span>
-                  </div>
+              <div id="snap-sub-options" class="flex flex-col gap-2.5 pl-3 border-l-2 border-blue-500/30 mt-1 ml-0.5">
+                <label class="flex items-center justify-between gap-3 cursor-pointer select-none w-full">
+                  <span class="text-[11.5px] text-gray-300 font-medium font-sans">Snap to Grid</span>
+                  <input id="snap-grid-cb" type="checkbox" checked class="w-3.5 h-3.5 shrink-0 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
                 </label>
-                <!-- Snap to Endpoints -->
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input id="snap-endpoints-cb" type="checkbox" checked class="w-3.5 h-3.5 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
-                  <div class="flex flex-col">
-                    <span class="text-[11.5px] text-gray-300 font-medium">Snap to Endpoints</span>
-                  </div>
+                <label class="flex items-center justify-between gap-3 cursor-pointer select-none w-full">
+                  <span class="text-[11.5px] text-gray-300 font-medium font-sans">Snap to Endpoints</span>
+                  <input id="snap-endpoints-cb" type="checkbox" checked class="w-3.5 h-3.5 shrink-0 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
                 </label>
-                <!-- Snap to Midpoints -->
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input id="snap-midpoints-cb" type="checkbox" checked class="w-3.5 h-3.5 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
-                  <div class="flex flex-col">
-                    <span class="text-[11.5px] text-gray-300 font-medium">Snap to Midpoints</span>
-                  </div>
+                <label class="flex items-center justify-between gap-3 cursor-pointer select-none w-full">
+                  <span class="text-[11.5px] text-gray-300 font-medium font-sans">Snap to Midpoints</span>
+                  <input id="snap-midpoints-cb" type="checkbox" checked class="w-3.5 h-3.5 shrink-0 rounded border-[#2a2d35] bg-[#1e2127] accent-blue-500 cursor-pointer" />
                 </label>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
-              <!-- Grid Visibility Toggle -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-medium text-gray-300">Display Grid</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Draw CAD viewport grid</span>
+              <!-- Grid Visibility Toggle (Starts ON) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-medium text-gray-300 truncate">Display Grid</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate">Draw CAD viewport grid</span>
                 </div>
-                <button id="toggle-grid-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-blue-600">
-                  <span id="grid-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-grid-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2563eb;" 
+                          class="focus:outline-none"
+                          title="Toggle Display Grid">
+                    <span id="grid-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(14px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
-              <!-- Measurements Overlay Toggle -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-gray-200">Show Shape Metrics</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Continuous dimension overlays</span>
+              <!-- Measurements Overlay Toggle (Starts OFF) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-semibold text-gray-200 truncate">Show Shape Metrics</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate">Continuous dimension overlays</span>
                 </div>
-                <button id="toggle-measurements-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-[#2A2D35]">
-                  <span id="measurements-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-measurements-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2A2D35;" 
+                          class="focus:outline-none"
+                          title="Toggle Dimensions overlay">
+                    <span id="measurements-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(0px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
-              <!-- Toggle Dimensions Shapes -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-gray-200">Show Dimensions</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Drawn CAD dimensions</span>
+              <!-- Toggle Dimensions Shapes (Starts ON) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-semibold text-gray-200 truncate">Show Dimensions</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate">Drawn CAD dimensions</span>
                 </div>
-                <button id="toggle-dimensions-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-blue-600">
-                  <span id="dimensions-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-dimensions-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2563eb;" 
+                          class="focus:outline-none"
+                          title="Toggle Dimensions rendering">
+                    <span id="dimensions-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(14px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
-              <!-- Toggle Room Dimensions -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-gray-200">Room Info Dimensions</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Room Width, Height and Area</span>
+              <!-- Toggle Room Dimensions (Starts ON) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-semibold text-gray-200 truncate">Room Info Dimensions</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate font-medium">Room Width, Height and Area</span>
                 </div>
-                <button id="toggle-room-dimensions-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-blue-600">
-                  <span id="room-dimensions-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-room-dimensions-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2563eb;" 
+                          class="focus:outline-none"
+                          title="Toggle Room Dimensions">
+                    <span id="room-dimensions-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(14px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
-              <!-- Toggle Wall & Opening Dimensions -->
-              <div class="flex items-center justify-between py-0.5">
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-gray-200">Wall/Aperture Dimensions</span>
-                  <span class="text-[9px] text-gray-500 font-mono">Auto outside dimensions</span>
+              <!-- Toggle Wall & Opening Dimensions (Starts ON) -->
+              <div class="flex items-center justify-between gap-4 py-0.5 w-full min-w-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="text-xs font-semibold text-gray-200 truncate">Wall/Aperture Dimensions</span>
+                  <span class="text-[9px] text-gray-500 font-mono truncate">Auto outside dimensions</span>
                 </div>
-                <button id="toggle-wall-dimensions-btn" class="relative inline-flex items-center h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none bg-blue-600">
-                  <span id="wall-dimensions-handle" class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-3.5"></span>
-                </button>
+                <!-- 100% Squeeze-Proof Shield Wrapper -->
+                <div style="width: 32px !important; min-width: 32px !important; max-width: 32px !important; height: 18px !important; min-height: 18px !important; max-height: 18px !important; flex-shrink: 0 !important; position: relative !important; box-sizing: border-box !important;">
+                  <button id="toggle-wall-dimensions-btn" 
+                          type="button"
+                          style="width: 100% !important; height: 100% !important; border-radius: 9999px !important; position: absolute !important; top: 0 !important; left: 0 !important; border: none !important; cursor: pointer !important; padding: 0 !important; transition: background-color 0.2s ease-in-out !important; background-color: #2563eb;" 
+                          class="focus:outline-none"
+                          title="Toggle Wall and Aperture Dimensions">
+                    <span id="wall-dimensions-handle" 
+                          style="width: 14px !important; height: 14px !important; border-radius: 50% !important; background-color: #ffffff !important; position: absolute !important; top: 2px !important; left: 2px !important; transform: translateX(14px); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; pointer-events: none !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;"></span>
+                  </button>
+                </div>
               </div>
 
-              <div class="h-[1px] bg-[#2A2D35]"></div>
+              <div class="h-[1px] bg-[#2A2D35] w-full"></div>
 
               <!-- Grid Size Slider -->
-              <div class="flex flex-col gap-1 py-0.5">
+              <div class="flex flex-col gap-1 py-0.5 w-full">
                 <div class="flex justify-between items-center text-[10px] text-gray-400 font-mono">
                   <span>SCALE GRID</span>
-                  <span id="grid-size-display">20 px</span>
+                  <span id="grid-size-display" class="font-bold text-cyan-400">20 px</span>
                 </div>
                 <input id="grid-size-slider" type="range" min="10" max="50" step="5" value="20" class="w-full accent-blue-500 cursor-pointer h-1 bg-[#1E2127] rounded appearance-none" />
               </div>
