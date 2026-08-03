@@ -226,3 +226,145 @@ body.light-theme .context-menu-item:hover {
   background-color: #3b82f6;
   color: #ffffff !important;
 }
+
+/* ==========================================================================
+   AETHER CAD SWITCH - BULLETPROOF TOGGLE STYLING
+   ========================================================================== */
+
+.aether-switch {
+  position: relative !important;
+  display: inline-block !important;
+  width: 36px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  vertical-align: middle !important;
+}
+
+.aether-slider {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 36px !important;
+  height: 20px !important;
+  background-color: #334155 !important;
+  transition: background-color 0.2s ease-in-out !important;
+  border-radius: 9999px !important;
+  box-sizing: border-box !important;
+}
+
+.aether-slider::before {
+  position: absolute !important;
+  content: "" !important;
+  height: 16px !important;
+  width: 16px !important;
+  left: 2px !important;
+  top: 2px !important;
+  background-color: #ffffff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  transition: transform 0.2s ease-in-out !important;
+  transform: translateX(0px) !important;
+  pointer-events: none !important;
+}
+
+/* Active State (ON) - Track Color */
+input[type="checkbox"]:checked + div .aether-switch .aether-slider,
+input[type="checkbox"]:checked + .aether-switch .aether-slider,
+#civil-toggle-checkbox:checked + div .aether-switch .aether-slider {
+  background-color: #0891b2 !important;
+}
+
+/* Active State (ON) - Smooth 16px Knob Slide */
+input[type="checkbox"]:checked + div .aether-switch .aether-slider::before,
+input[type="checkbox"]:checked + .aether-switch .aether-slider::before,
+#civil-toggle-checkbox:checked + div .aether-switch .aether-slider::before {
+  transform: translateX(16px) !important;
+}
+
+/* ==========================================================================
+   PERFECT SINGLE-PROP DRAFTING GUIDES FIX (PREVENTS DOUBLE TRANSLATION)
+   ========================================================================== */
+
+/* 1. Track Button: Exact 36px x 20px pill */
+#toggle-snap-btn, 
+#toggle-grid-btn, 
+#toggle-measurements-btn, 
+#toggle-dimensions-btn, 
+#toggle-room-dimensions-btn, 
+#toggle-wall-dimensions-btn {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: relative !important;
+  display: inline-block !important;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  vertical-align: middle !important;
+  flex-shrink: 0 !important;
+  transition: background-color 0.2s ease-in-out !important;
+}
+
+/* 2. White Circular Knob: 16px x 16px positioned at top 2px, left 2px */
+#snap-handle, 
+#grid-handle, 
+#measurements-handle, 
+#dimensions-handle, 
+#room-dimensions-handle, 
+#wall-dimensions-handle {
+  position: absolute !important;
+  top: 2px !important;
+  left: 2px !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  /* CRITICAL: Neutralize transform to prevent doubling with Tailwind translate */
+  transform: none !important;
+  transition: translate 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* 3. Enforce exact single-property translation values */
+#snap-handle.translate-x-4, 
+#grid-handle.translate-x-4, 
+#measurements-handle.translate-x-4, 
+#dimensions-handle.translate-x-4, 
+#room-dimensions-handle.translate-x-4, 
+#wall-dimensions-handle.translate-x-4 {
+  translate: 16px 0 !important;
+  transform: none !important;
+}
+
+#snap-handle.translate-x-0, 
+#grid-handle.translate-x-0, 
+#measurements-handle.translate-x-0, 
+#dimensions-handle.translate-x-0, 
+#room-dimensions-handle.translate-x-0, 
+#wall-dimensions-handle.translate-x-0 {
+  translate: 0 0 !important;
+  transform: none !important;
+}
+
+/* 4. Sub-options Muting when Object Snapping is OFF */
+#snap-sub-options.disabled-sub-options {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+  filter: grayscale(100%) !important;
+  transition: all 0.2s ease-in-out !important;
+}
