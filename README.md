@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# AetherCAD Pro 📐
 
-# Run and deploy your AI Studio app
+A desktop-focused, web-based 2D CAD application designed to help civil engineering students create technical drawings and layouts directly in their browser without relying on expensive professional software.
 
-This contains everything you need to run your app locally.
+## ✨ Features
+* **Core Drafting Tools:** Intuitive tools for drawing lines, rectangles, and circles with high precision.
+* **Engineering Layouts:** Customizable grid overlays and continuous measurement metrics tailored for student use.
+* **Accessible & Lightweight:** Runs entirely in the browser—no heavy installations or expensive licenses required.
 
-View your app in AI Studio: https://ai.studio/apps/f153e7a6-1d80-4595-84fb-051cedcd376a
+## 🛠️ Tech Stack
+* **Frontend:** HTML5, CSS3, JavaScript / TypeScript, Vite
+* **Backend / Database:** Supabase
+* **Deployment & Serverless:** Vercel
 
-## Run Locally
+## 🚀 Getting Started Locally
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/tiruforge/aethercad-pro_v2.git](https://github.com/tiruforge/aethercad-pro_v2.git)
+   cd aethercad-pro_v2
+   npm install
+   npm run dev
+   
