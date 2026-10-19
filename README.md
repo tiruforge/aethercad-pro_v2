@@ -1,11 +1,14 @@
 # AetherCAD Pro 📐
 
-A desktop-focused, web-based 2D CAD application designed to help civil engineering students create technical drawings and layouts directly in their browser without relying on expensive professional software.
+A desktop-focused, web-based 2D CAD application designed to help civil engineering students and designers create technical drawings, structural layouts, and blueprints directly in their browser without relying on expensive professional software.
 
-## ✨ Features
-* **Core Drafting Tools:** Intuitive tools for drawing lines, rectangles, and circles with high precision.
-* **Engineering Layouts:** Customizable grid overlays and continuous measurement metrics tailored for student use.
-* **Accessible & Lightweight:** Runs entirely in the browser—no heavy installations or expensive licenses required.
+## ✨ Key Features
+* **Precision Drafting Tools:** Intuitive tools for drawing lines, rectangles, circles, and shapes with exact coordinate inputs and custom stroke/layer settings.
+* **Civil CAD Toolkit:** Pre-built templates (1BHK, 2BHK, 3BHK, Office, and Classroom layouts) with instant insertion for walls, columns, beams, doors, and windows.
+* **Advanced Object Snapping & Guides:** Grid, endpoint, and midpoint snapping to ensure high drafting accuracy.
+* **Layers & Project Management:** Full layer management (Walls, Columns, Dimensions) and project workspace controls.
+* **Import & Export Support:** Robust file handling supporting DXF, SVG, PNG, PDF, JSON exports, and file imports.
+* **Accessible & Lightweight:** Runs entirely in the browser with dark mode support and autosave functionality.
 
 ## 🛠️ Tech Stack
 * **Frontend:** HTML5, CSS3, JavaScript / TypeScript, Vite
@@ -20,4 +23,3 @@ A desktop-focused, web-based 2D CAD application designed to help civil engineeri
    cd aethercad-pro_v2
    npm install
    npm run dev
-   
